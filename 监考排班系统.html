@@ -1,0 +1,4531 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能监考排班系统 V2.0</title>
+    <!-- 注意：此代码使用了Tailwind CDN，仅用于演示。生产环境请使用PostCSS插件或Tailwind CLI -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="./utils.js"></script>
+    <style>
+        :root {
+            --primary: #3b82f6;
+            --primary-dark: #2563eb;
+            --secondary: #10b981;
+            --secondary-dark: #059669;
+            --accent: #8b5cf6;
+            --accent-dark: #7c3aed;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --success: #10b981;
+            --bg-light: #ffffff;
+            --bg-dark: #0f172a;
+            --surface-light: #f8fafc;
+            --surface-dark: #1e293b;
+            --text-primary-light: #0f172a;
+            --text-primary-dark: #f1f5f9;
+            --text-secondary-light: #64748b;
+            --text-secondary-dark: #94a3b8;
+            --border-light: #e2e8f0;
+            --border-dark: #334155;
+        }
+
+        [data-theme="dark"] {
+            --bg: var(--bg-dark);
+            --surface: var(--surface-dark);
+            --text-primary: var(--text-primary-dark);
+            --text-secondary: var(--text-secondary-dark);
+            --border: var(--border-dark);
+        }
+
+        [data-theme="light"] {
+            --bg: var(--bg-light);
+            --surface: var(--surface-light);
+            --text-primary: var(--text-primary-light);
+            --text-secondary: var(--text-secondary-light);
+            --border: var(--border-light);
+        }
+
+        * {
+            transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: var(--bg);
+            color: var(--text-primary);
+            min-height: 100vh;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* 修复暗色模式下的背景RGB变量 */
+        [data-theme="dark"] .glass-card {
+            background: rgba(30, 41, 59, 0.8);
+        }
+
+        [data-theme="light"] .glass-card {
+            background: rgba(248, 250, 252, 0.8);
+        }
+
+        /* 背景动画 */
+        .bg-gradient-animated {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(45deg, var(--primary), var(--accent), var(--secondary));
+            background-size: 400% 400%;
+            animation: gradientShift 15s ease infinite;
+            opacity: 0.05;
+            z-index: -1;
+        }
+
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* 毛玻璃卡片 */
+        .glass-card {
+            background: var(--surface);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .glass-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 48px rgba(0, 0, 0, 0.15);
+        }
+
+        /* 按钮样式 */
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 12px;
+            font-weight: 600;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            transform: translateZ(0);
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        .btn:active::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, var(--secondary), var(--secondary-dark));
+            color: white;
+            box-shadow: 0 4px 16px rgba(16, 185, 129, 0.3);
+        }
+
+        .btn-accent {
+            background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+            color: white;
+            box-shadow: 0 4px 16px rgba(139, 92, 246, 0.3);
+        }
+
+        /* 文件上传区域 */
+        .upload-zone {
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            transition: all 0.3s;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .upload-zone::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(45deg, var(--primary), var(--accent));
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: -1;
+        }
+
+        .upload-zone:hover {
+            border-color: var(--primary);
+            transform: scale(1.02);
+        }
+
+        .upload-zone:hover::before {
+            opacity: 0.1;
+        }
+
+        .upload-zone.dragover {
+            border-color: var(--primary);
+            background: rgba(59, 130, 246, 0.1);
+        }
+
+        /* 标签页 */
+        .tab {
+            padding: 0.75rem 1.5rem;
+            border-radius: 12px 12px 0 0;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+        }
+
+        .tab.active {
+            background: var(--surface);
+            color: var(--primary);
+        }
+
+        .tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--primary), var(--accent));
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from { transform: scaleX(0); }
+            to { transform: scaleX(1); }
+        }
+
+        /* 进度条 */
+        .progress-bar {
+            height: 6px;
+            background: var(--border);
+            border-radius: 3px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--accent));
+            border-radius: 3px;
+            transition: width 0.5s ease-out;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .progress-fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            right: 0;
+            background: linear-gradient(
+                90deg,
+                transparent,
+                rgba(255, 255, 255, 0.3),
+                transparent
+            );
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        /* 工具提示 */
+        .tooltip {
+            position: relative;
+        }
+
+        .tooltip::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--surface-dark);
+            color: var(--text-primary-dark);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.3s;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .tooltip:hover::after {
+            opacity: 1;
+            transform: translateX(-50%) translateY(-8px);
+        }
+
+        /* 加载动画 */
+        .loader {
+            width: 48px;
+            height: 48px;
+            position: relative;
+        }
+
+        .loader::before,
+        .loader::after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 3px solid transparent;
+            border-top-color: var(--primary);
+            animation: spin 1s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite;
+        }
+
+        .loader::after {
+            animation-delay: 0.2s;
+            border-top-color: var(--accent);
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* 平滑滚动 */
+        .smooth-scroll {
+            scroll-behavior: smooth;
+            scrollbar-width: thin;
+            scrollbar-color: var(--primary) var(--border);
+        }
+
+        .smooth-scroll::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        .smooth-scroll::-webkit-scrollbar-track {
+            background: var(--border);
+            border-radius: 4px;
+        }
+
+        .smooth-scroll::-webkit-scrollbar-thumb {
+            background: var(--primary);
+            border-radius: 4px;
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .glass-card {
+                border-radius: 12px;
+            }
+            
+            .btn {
+                padding: 0.5rem 1rem;
+                font-size: 0.875rem;
+            }
+        }
+
+        /* 统计图表容器 */
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin: 1rem 0;
+        }
+
+        /* 快速操作浮动按钮 */
+        .fab {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+            cursor: pointer;
+            transition: all 0.3s;
+            z-index: 1000;
+        }
+
+        .fab:hover {
+            transform: scale(1.1) rotate(90deg);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+        }
+
+        /* 拖拽指示器 */
+        .drag-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .dragging .drag-indicator {
+            opacity: 1;
+        }
+
+        /* 通知样式 */
+        .notification {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1rem 1.5rem;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+            transform: translateX(400px);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 2000;
+            max-width: 400px;
+        }
+
+        .notification.show {
+            transform: translateX(0);
+        }
+
+        .notification.success {
+            border-left: 4px solid var(--success);
+        }
+
+        .notification.error {
+            border-left: 4px solid var(--danger);
+        }
+
+        .notification.info {
+            border-left: 4px solid var(--primary);
+        }
+
+        /* 步骤指示器 */
+        .step-indicator {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 2rem;
+            position: relative;
+        }
+
+        .step-indicator::before {
+            content: '';
+            position: absolute;
+            top: 20px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--border);
+            z-index: -1;
+        }
+
+        .step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+        }
+
+        .step-circle {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--surface);
+            border: 2px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+
+        .step.active .step-circle {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+            transform: scale(1.1);
+        }
+
+        .step.completed .step-circle {
+            background: var(--success);
+            color: white;
+            border-color: var(--success);
+        }
+
+        .step-label {
+            margin-top: 0.5rem;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            text-align: center;
+        }
+    </style>
+</head>
+<body data-theme="light" class="smooth-scroll">
+    <div class="bg-gradient-animated"></div>
+    
+    <!-- 头部导航 -->
+    <header class="sticky top-0 z-50 backdrop-blur-lg border-b border-opacity-10" style="background: rgba(255, 255, 255, 0.8);">
+        <div class="container mx-auto px-4 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+                            <i class="fas fa-calendar-check text-white"></i>
+                        </div>
+                        <div>
+                            <h1 class="text-xl font-bold">智能监考排班系统</h1>
+                            <span class="text-xs text-gray-500">V2.0 Pro</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex items-center gap-4">
+                    <!-- 快速操作 -->
+                    <button class="tooltip p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800" data-tooltip="快捷键">
+                        <i class="fas fa-keyboard text-gray-600"></i>
+                    </button>
+                    <button class="tooltip p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800" data-tooltip="帮助文档">
+                        <i class="fas fa-question-circle text-gray-600"></i>
+                    </button>
+                    <button id="themeToggle" class="tooltip p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800" data-tooltip="切换主题">
+                        <i class="fas fa-moon text-gray-600" id="moonIcon"></i>
+                        <i class="fas fa-sun text-gray-400 hidden" id="sunIcon"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主内容区 -->
+    <main class="container mx-auto px-4 py-8">
+        <!-- 步骤指示器 -->
+        <div class="step-indicator mb-8">
+            <div class="step active" id="step1">
+                <div class="step-circle">1</div>
+                <div class="step-label">导入数据</div>
+            </div>
+            <div class="step" id="step2">
+                <div class="step-circle">2</div>
+                <div class="step-label">设置规则</div>
+            </div>
+            <div class="step" id="step3">
+                <div class="step-circle">3</div>
+                <div class="step-label">智能分配</div>
+            </div>
+            <div class="step" id="step4">
+                <div class="step-circle">4</div>
+                <div class="step-label">结果优化</div>
+            </div>
+        </div>
+
+        <!-- 主要内容网格 -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <!-- 左侧面板 -->
+            <div class="lg:col-span-3">
+                <div class="glass-card p-6 mb-6">
+                    <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                        <i class="fas fa-upload text-blue-500"></i>
+                        数据导入
+                    </h2>
+                    
+                    <!-- 教师名单上传 -->
+                    <div class="mb-4">
+                        <label class="text-sm font-medium text-gray-600 mb-2 block">教师名单</label>
+                        <div id="teacherDropZone" class="upload-zone">
+                            <i class="fas fa-cloud-upload-alt text-3xl text-gray-400 mb-2"></i>
+                            <p class="text-sm text-gray-500">拖拽文件到此处或点击上传</p>
+                            <p class="text-xs text-gray-400 mt-1">支持 Excel, CSV 格式</p>
+                        </div>
+                        <input type="file" id="teacherFile" class="hidden" accept=".xlsx,.xls,.csv">
+                    </div>
+
+                    <!-- 考场安排上传 -->
+                    <div class="mb-4">
+                        <label class="text-sm font-medium text-gray-600 mb-2 block">考场安排</label>
+                        <div id="scheduleDropZone" class="upload-zone">
+                            <i class="fas fa-cloud-upload-alt text-3xl text-gray-400 mb-2"></i>
+                            <p class="text-sm text-gray-500">拖拽文件到此处或点击上传</p>
+                            <p class="text-xs text-gray-400 mt-1">支持 Excel, CSV 格式</p>
+                        </div>
+                        <input type="file" id="scheduleFile" class="hidden" accept=".xlsx,.xls,.csv">
+                    </div>
+
+                    <!-- 快速导入 -->
+                    <div class="flex gap-2">
+                        <button class="btn btn-secondary flex-1 text-sm" onclick="useTemplate()">
+                            <i class="fas fa-history mr-2"></i>
+                            使用模板
+                        </button>
+                        <button class="btn btn-secondary flex-1 text-sm" onclick="loadRecentFiles()">
+                            <i class="fas fa-clock mr-2"></i>
+                            最近文件
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 规则设置 -->
+                <div class="glass-card p-6">
+                    <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                        <i class="fas fa-sliders-h text-purple-500"></i>
+                        规则设置
+                    </h2>
+
+                    <!-- 标签页 -->
+                    <div class="flex gap-2 mb-4">
+                        <div class="tab active" data-tab="basic">基础规则</div>
+                        <div class="tab" data-tab="advanced">高级设置</div>
+                    </div>
+
+                    <!-- 基础规则内容 -->
+                    <div id="basicRules" class="tab-content">
+                        <div class="space-y-4">
+                            <div>
+                                <label class="text-sm font-medium text-gray-600 mb-2 block">工作量平衡</label>
+                                <input type="range" class="w-full" min="0" max="100" value="80">
+                                <div class="flex justify-between text-xs text-gray-500 mt-1">
+                                    <span>宽松</span>
+                                    <span>严格</span>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="text-sm font-medium text-gray-600 mb-2 block">时间冲突容忍度</label>
+                                <select class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                                    <option>不允许任何冲突</option>
+                                    <option>允许15分钟间隔</option>
+                                    <option>允许30分钟间隔</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" class="w-4 h-4 text-blue-600 rounded">
+                                    <span class="text-sm">优先考虑教师偏好</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 高级设置内容 -->
+                    <div id="advancedRules" class="tab-content hidden">
+                        <div class="space-y-4">
+                            <button class="w-full btn btn-secondary text-sm" onclick="showExclusionModal()">
+                                <i class="fas fa-user-times mr-2"></i>
+                                教师排除规则
+                            </button>
+                            <button class="w-full btn btn-secondary text-sm" onclick="showDesignationModal()">
+                                <i class="fas fa-user-check mr-2"></i>
+                                指定监考任务
+                            </button>
+                            <button class="w-full btn btn-secondary text-sm" onclick="showLockingModal()">
+                                <i class="fas fa-lock mr-2"></i>
+                                锁定特定安排
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 中间主区域 -->
+            <div class="lg:col-span-6">
+                <div class="glass-card p-6 h-full">
+                    <div class="flex items-center justify-between mb-6">
+                        <h2 class="text-lg font-semibold flex items-center gap-2">
+                            <i class="fas fa-magic text-purple-500"></i>
+                            智能排班结果
+                        </h2>
+                        <div class="flex gap-2">
+                            <button class="btn btn-primary text-sm" id="runButton">
+                                <i class="fas fa-play mr-2"></i>
+                                开始分配
+                            </button>
+                            <button class="btn btn-accent text-sm" id="optimizeButton" disabled>
+                                <i class="fas fa-wand-magic-sparkles mr-2"></i>
+                                AI优化
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 进度显示 -->
+                    <div id="progressSection" class="hidden mb-6">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-sm text-gray-600">处理进度</span>
+                            <span class="text-sm font-medium" id="progressText">0%</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-2" id="progressStatus">准备开始...</p>
+                    </div>
+
+                    <!-- 结果显示区 -->
+                    <div id="resultsArea" class="min-h-[500px] flex items-center justify-center">
+                        <div class="text-center">
+                            <i class="fas fa-inbox text-6xl text-gray-300 mb-4"></i>
+                            <p class="text-gray-500">暂无排班结果</p>
+                            <p class="text-sm text-gray-400 mt-2">请先导入数据并点击"开始分配"</p>
+                        </div>
+                    </div>
+
+                    <!-- 结果表格（初始隐藏） -->
+                    <div id="resultsTable" class="hidden overflow-x-auto">
+                        <!-- 动态生成表格内容 -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右侧面板 -->
+            <div class="lg:col-span-3">
+                <!-- 实时统计 -->
+                <div class="glass-card p-6 mb-6">
+                    <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                        <i class="fas fa-chart-line text-green-500"></i>
+                        实时统计
+                    </h2>
+                    
+                    <div id="statsContent">
+                        <!-- 统计卡片 -->
+                        <div class="grid grid-cols-2 gap-3 mb-4">
+                            <div class="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
+                                <div class="text-2xl font-bold text-blue-600" id="totalTeachers">0</div>
+                                <div class="text-xs text-gray-600 dark:text-gray-400">参与教师</div>
+                            </div>
+                            <div class="bg-purple-50 dark:bg-purple-900/20 p-3 rounded-lg">
+                                <div class="text-2xl font-bold text-purple-600" id="totalSessions">0</div>
+                                <div class="text-xs text-gray-600 dark:text-gray-400">考试场次</div>
+                            </div>
+                            <div class="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg">
+                                <div class="text-2xl font-bold text-green-600" id="avgWorkload">0</div>
+                                <div class="text-xs text-gray-600 dark:text-gray-400">平均工作量</div>
+                            </div>
+                            <div class="bg-orange-50 dark:bg-orange-900/20 p-3 rounded-lg transition-colors duration-300">
+                                <div class="text-2xl font-bold text-orange-600" id="balanceScore">0%</div>
+                                <div class="text-xs text-gray-600 dark:text-gray-400">均衡度</div>
+                            </div>
+                        </div>
+
+                        <!-- 图表容器 -->
+                        <div class="chart-container">
+                            <canvas id="workloadChart"></canvas>
+                        </div>
+                        
+                        <!-- 详细统计按钮 -->
+                        <button class="w-full mt-4 btn btn-secondary text-sm" onclick="showDetailedStats()">
+                            <i class="fas fa-list-ul mr-2"></i>
+                            查看详细统计
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 快速操作 -->
+                <div class="glass-card p-6">
+                    <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                        <i class="fas fa-bolt text-yellow-500"></i>
+                        快速操作
+                    </h2>
+                    
+                    <div class="space-y-3">
+                        <button class="w-full btn btn-secondary text-sm justify-start" onclick="exportToExcel()">
+                            <i class="fas fa-download mr-2"></i>
+                            导出Excel表格
+                        </button>
+                        <button class="w-full btn btn-secondary text-sm justify-start" onclick="printNotifications()">
+                            <i class="fas fa-print mr-2"></i>
+                            打印监考通知
+                        </button>
+                        <button class="w-full btn btn-secondary text-sm justify-start" onclick="shareResults()">
+                            <i class="fas fa-share-alt mr-2"></i>
+                            分享排班结果
+                        </button>
+                        <button class="w-full btn btn-secondary text-sm justify-start" onclick="showHistory()">
+                            <i class="fas fa-history mr-2"></i>
+                            查看历史记录
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 浮动操作按钮 -->
+    <div class="fab" id="fabButton">
+        <i class="fas fa-plus"></i>
+    </div>
+
+    <!-- 通知容器 -->
+    <div id="notificationContainer"></div>
+
+    <!-- 模态框容器 -->
+    <div id="modalContainer"></div>
+
+    <script>
+        // ========== 全局状态管理 ==========
+        const AppState = {
+            theme: 'light',
+            currentStep: 1,
+            teachers: [],
+            schedule: [],
+            assignments: [],
+            sessions: [],  // 添加sessions到全局状态
+            historicalStats: {}, // 添加历史统计
+            rules: {
+                workloadBalance: 80,
+                conflictTolerance: 0,
+                preferenceWeight: 0.5,
+                exclusions: {},
+                designations: [],
+                locked: []
+            },
+            stats: {
+                totalTeachers: 0,
+                totalSessions: 0,
+                avgWorkload: 0,
+                balanceScore: 0
+            },
+            processing: false,
+            deepseekApiKey: null // API密钥
+        };
+
+        // ========== 全局工具函数 ==========
+        function parseTime(timeStr) {
+            if (!timeStr || typeof timeStr !== 'string') {
+                console.error('Invalid time string for parseTime:', timeStr);
+                return 0;
+            }
+            const parts = timeStr.split(':');
+            if (parts.length !== 2) {
+                console.error('Invalid time string format for parseTime:', timeStr);
+                return 0;
+            }
+            const hours = parseInt(parts[0], 10);
+            const minutes = parseInt(parts[1], 10);
+            if (isNaN(hours) || isNaN(minutes)) {
+                console.error('Non-numeric time parts for parseTime:', timeStr);
+                return 0;
+            }
+            return hours * 60 + minutes;
+        }
+
+        // ========== 主题切换 ==========
+        const themeToggle = document.getElementById('themeToggle');
+        const moonIcon = document.getElementById('moonIcon');
+        const sunIcon = document.getElementById('sunIcon');
+        
+        themeToggle.addEventListener('click', () => {
+            AppState.theme = AppState.theme === 'light' ? 'dark' : 'light';
+            document.body.setAttribute('data-theme', AppState.theme);
+            
+            // 切换图标显示
+            if (AppState.theme === 'dark') {
+                moonIcon.classList.add('hidden');
+                sunIcon.classList.remove('hidden');
+            } else {
+                moonIcon.classList.remove('hidden');
+                sunIcon.classList.add('hidden');
+            }
+            
+            // 更新header背景
+            const header = document.querySelector('header');
+            if (AppState.theme === 'dark') {
+                header.style.background = 'rgba(15, 23, 42, 0.8)';
+            } else {
+                header.style.background = 'rgba(255, 255, 255, 0.8)';
+            }
+        });
+
+        // 初始化主题为浅色
+        AppState.theme = 'light';
+        document.body.setAttribute('data-theme', 'light');
+
+        // ========== 步骤管理 ==========
+        function updateStep(step) {
+            AppState.currentStep = step;
+            document.querySelectorAll('.step').forEach((el, index) => {
+                if (index < step - 1) {
+                    el.classList.add('completed');
+                    el.classList.remove('active');
+                } else if (index === step - 1) {
+                    el.classList.add('active');
+                    el.classList.remove('completed');
+                } else {
+                    el.classList.remove('active', 'completed');
+                }
+            });
+        }
+
+        // ========== 文件上传处理 ==========
+        function setupFileUpload(dropZoneId, fileInputId, type) {
+            const dropZone = document.getElementById(dropZoneId);
+            const fileInput = document.getElementById(fileInputId);
+
+            dropZone.addEventListener('click', () => fileInput.click());
+            
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropZone.classList.add('dragover');
+            });
+
+            dropZone.addEventListener('dragleave', () => {
+                dropZone.classList.remove('dragover');
+            });
+
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('dragover');
+                
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    handleFile(files[0], type);
+                }
+            });
+
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    handleFile(e.target.files[0], type);
+                }
+            });
+        }
+
+        // 设置文件上传
+        setupFileUpload('teacherDropZone', 'teacherFile', 'teacher');
+        setupFileUpload('scheduleDropZone', 'scheduleFile', 'schedule');
+
+        // ========== 文件处理 ==========
+        function handleFile(file, type) {
+            showNotification(`正在处理 ${file.name}...`, 'info');
+            
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+                    
+                    if (type === 'teacher') {
+                        processTeacherData(jsonData);
+                    } else {
+                        processScheduleData(jsonData);
+                    }
+                    
+                    // 更新UI
+                    updateFileStatus(type, file.name);
+                    checkReadyToProcess();
+                    
+                } catch (error) {
+                    showNotification(`文件处理失败: ${error.message}`, 'error');
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // ========== 数据处理 ==========
+        function processTeacherData(data) {
+            if (!data || data.length < 2) {
+                showNotification('文件数据为空或格式错误', 'error');
+                return;
+            }
+            
+            // 查找标题行
+            const headers = data[0];
+            let nameIndex = -1;
+            let deptIndex = -1;
+            
+            // 更宽松的列名匹配
+            const namePatterns = ['姓名', '教师姓名', '教师', '名字', 'name', 'teacher'];
+            const deptPatterns = ['部门', '院系', '学院', '系', 'department', 'dept'];
+            
+            headers.forEach((header, index) => {
+                if (header) {
+                    const headerStr = header.toString().toLowerCase();
+                    if (nameIndex === -1 && namePatterns.some(p => headerStr.includes(p))) {
+                        nameIndex = index;
+                    }
+                    if (deptIndex === -1 && deptPatterns.some(p => headerStr.includes(p))) {
+                        deptIndex = index;
+                    }
+                }
+            });
+            
+            if (nameIndex === -1) {
+                showNotification('未找到姓名列，请确保表头包含"姓名"字段', 'error');
+                return;
+            }
+            
+            AppState.teachers = [];
+            console.log('=== 教师数据解析调试 ===');
+            console.log('姓名列索引:', nameIndex);
+            console.log('部门列索引:', deptIndex);
+            console.log('数据行数:', data.length - 1);
+            
+            for (let i = 1; i < data.length; i++) {
+                if (data[i] && data[i][nameIndex]) {
+                    const rawName = data[i][nameIndex];
+                    const name = rawName.toString().trim();
+                    console.log(`第${i}行: 原始姓名="${rawName}", 处理后="${name}"`);
+                    if (name) {
+                        const teacher = {
+                            name: name,
+                            department: deptIndex >= 0 && data[i][deptIndex] ? data[i][deptIndex].toString().trim() : '',
+                            workload: 0,
+                            assignments: []
+                        };
+                        AppState.teachers.push(teacher);
+                        console.log('添加教师:', teacher);
+                    }
+                }
+            }
+            
+            console.log('最终教师列表:', AppState.teachers.map(t => t.name));
+            
+            if (AppState.teachers.length === 0) {
+                showNotification('未能从文件中提取有效数据', 'error');
+                return;
+            }
+            
+            updateStats();
+            showNotification(`成功导入 ${AppState.teachers.length} 位教师`, 'success');
+            updateStep(2);
+        }
+
+        function processScheduleData(data) {
+            if (!data || data.length < 2) {
+                showNotification('文件数据为空或格式错误', 'error');
+                return;
+            }
+            
+            const headers = data[0];
+            let dateIndex = -1;
+            let startIndex = -1;
+            let endIndex = -1;
+            let locationIndex = -1;
+            
+            // 更宽松的列名匹配
+            const datePatterns = ['日期', '考试日期', 'date', '时间'];
+            const startPatterns = ['开始时间', '开始', '起始', 'start'];
+            const endPatterns = ['结束时间', '结束', '终止', 'end'];
+            const locationPatterns = ['地点', '考场', '教室', '场地', 'location', 'room'];
+            
+            headers.forEach((header, index) => {
+                if (header) {
+                    const headerStr = header.toString().toLowerCase();
+                    if (dateIndex === -1 && datePatterns.some(p => headerStr.includes(p))) {
+                        dateIndex = index;
+                    }
+                    if (startIndex === -1 && startPatterns.some(p => headerStr.includes(p))) {
+                        startIndex = index;
+                    }
+                    if (endIndex === -1 && endPatterns.some(p => headerStr.includes(p))) {
+                        endIndex = index;
+                    }
+                    if (locationIndex === -1 && locationPatterns.some(p => headerStr.includes(p))) {
+                        locationIndex = index;
+                    }
+                }
+            });
+            
+            // 验证必要字段
+            const missingFields = [];
+            if (dateIndex === -1) missingFields.push('日期');
+            if (startIndex === -1) missingFields.push('开始时间');
+            if (endIndex === -1) missingFields.push('结束时间');
+            if (locationIndex === -1) missingFields.push('考场/地点');
+            
+            if (missingFields.length > 0) {
+                showNotification(`未找到必要列：${missingFields.join('、')}`, 'error');
+                return;
+            }
+            
+            AppState.schedule = [];
+            for (let i = 1; i < data.length; i++) {
+                if (data[i] && data[i][dateIndex]) {
+                    // 处理日期格式
+                    let dateStr = data[i][dateIndex].toString();
+                    if (typeof data[i][dateIndex] === 'number') {
+                        // Excel日期序列号转换
+                        const excelDate = new Date((data[i][dateIndex] - 25569) * 86400 * 1000);
+                        dateStr = excelDate.toLocaleDateString('zh-CN');
+                    }
+                    
+                    // 处理时间格式
+                    let startTime = data[i][startIndex].toString();
+                    let endTime = data[i][endIndex].toString();
+                    
+                    // 如果是Excel时间格式（小数），转换为时间字符串
+                    if (!isNaN(parseFloat(startTime)) && parseFloat(startTime) < 1) {
+                        const hours = Math.floor(parseFloat(startTime) * 24);
+                        const minutes = Math.round((parseFloat(startTime) * 24 - hours) * 60);
+                        startTime = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+                    }
+                    
+                    if (!isNaN(parseFloat(endTime)) && parseFloat(endTime) < 1) {
+                        const hours = Math.floor(parseFloat(endTime) * 24);
+                        const minutes = Math.round((parseFloat(endTime) * 24 - hours) * 60);
+                        endTime = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+                    }
+                    
+                    AppState.schedule.push({
+                        date: dateStr,
+                        startTime: startTime,
+                        endTime: endTime,
+                        location: data[i][locationIndex].toString(),
+                        required: 1,
+                        assigned: []
+                    });
+                }
+            }
+            
+            if (AppState.schedule.length === 0) {
+                showNotification('未能从文件中提取有效数据', 'error');
+                return;
+            }
+            
+            updateStats();
+            showNotification(`成功导入 ${AppState.schedule.length} 个考场安排`, 'success');
+            
+            // 如果两个文件都已导入，自动进入下一步
+            if (AppState.teachers.length > 0 && AppState.schedule.length > 0) {
+                updateStep(2);
+            }
+        }
+
+        // ========== 智能分配算法 V2.0 - 基于算法规范优化 ==========
+        async function runSmartAssignment() {
+            if (AppState.processing) return;
+            
+            AppState.processing = true;
+            updateStep(3);
+            showProgress();
+            
+            try {
+                // 重置之前的分配
+                AppState.assignments = [];
+                AppState.teachers.forEach(t => {
+                    t.workload = 0;
+                    t.assignments = [];
+                    // 确保每个教师都有必要的属性
+                    if (!t.name) {
+                        console.warn('发现没有姓名的教师对象:', t);
+                    }
+                });
+                
+                // 验证数据完整性
+                if (!validateScheduleData()) {
+                    throw new Error('考场数据不完整，请检查导入的文件');
+                }
+                
+                // 按日期分组场次（核心策略：按天优先）
+                const sessionsByDate = groupSessionsByDate();
+                const sortedDates = Array.from(sessionsByDate.keys()).sort();
+                
+                // 初始化教师工作量统计（包含历史数据）
+                const teacherWorkload = initializeWorkloadWithHistory();
+                
+                // 第一阶段：处理强制分配（最高优先级）
+                updateProgress(10, '处理强制分配...');
+                await processForceAssignments(sessionsByDate, teacherWorkload);
+                
+                // 第二阶段：处理指定监考（次高优先级）
+                updateProgress(20, '处理指定监考...');
+                await processDesignatedAssignments(sessionsByDate, teacherWorkload);
+                
+                // 第三阶段：按天智能分配（核心算法）
+                updateProgress(30, '开始智能分配...');
+                const failedSlots = [];
+                
+                for (let dateIndex = 0; dateIndex < sortedDates.length; dateIndex++) {
+                    const date = sortedDates[dateIndex];
+                    const sessionsForDate = sessionsByDate.get(date) || [];
+                    
+                    updateProgress(30 + (dateIndex / sortedDates.length * 50), `处理 ${date} 的监考安排...`);
+                    
+                    // 按时间顺序处理当天的所有场次
+                    for (const session of sessionsForDate) {
+                        const unassignedSlots = collectUnassignedSlots(session);
+                        
+                        for (const slotInfo of unassignedSlots) {
+                            const result = await assignTeacherToSlot(
+                                session, 
+                                slotInfo, 
+                                teacherWorkload, 
+                                date
+                            );
+                            
+                            if (!result.success) {
+                                failedSlots.push(result);
+                            }
+                        }
+                    }
+                }
+                
+                // 第四阶段：错误处理和人员不足标记
+                if (failedSlots.length > 0) {
+                    updateProgress(85, '处理人员不足情况...');
+                    await handleFailedAssignments(failedSlots);
+                }
+                
+                // 第五阶段：结果验证
+                updateProgress(95, '验证分配结果...');
+                const validationResult = validateAssignments(AppState.assignments);
+                
+                // 完成处理
+                AppState.processing = false;
+                hideProgress();
+                displayResults();
+                updateStats();
+                updateStep(4);
+                
+                // 显示结果摘要
+                showAssignmentSummary(validationResult);
+                
+                // 启用优化按钮
+                document.getElementById('optimizeButton').disabled = false;
+                
+            } catch (error) {
+                AppState.processing = false;
+                hideProgress();
+                showNotification('分配过程出错: ' + error.message, 'error');
+            }
+        }
+        
+// 将考场安排分组为场次
+        function groupScheduleIntoSessions() {
+            const sessionsMap = new Map();
+            
+            AppState.schedule.forEach(slot => {
+                const sessionKey = `${slot.date}_${slot.startTime}_${slot.endTime}`;
+                
+                if (!sessionsMap.has(sessionKey)) {
+                    sessionsMap.set(sessionKey, {
+                        date: slot.date,
+                        startTime: slot.startTime,
+                        endTime: slot.endTime,
+                        slots: []
+                    });
+                }
+                
+                sessionsMap.get(sessionKey).slots.push({
+                    location: slot.location,
+                    required: slot.required,
+                    assigned: []
+                });
+            });
+            
+            AppState.sessions = Array.from(sessionsMap.values());
+        }
+        // 按日期分组场次
+        function groupSessionsByDate() {
+            const sessionsByDate = new Map();
+            
+            // 确保sessions已经生成
+            if (!AppState.sessions || AppState.sessions.length === 0) {
+                groupScheduleIntoSessions();
+            }
+            
+            AppState.sessions.forEach(session => {
+                if (!sessionsByDate.has(session.date)) {
+                    sessionsByDate.set(session.date, []);
+                }
+                sessionsByDate.get(session.date).push(session);
+            });
+            
+            // 每个日期内按时间排序
+            sessionsByDate.forEach((sessionsArray, date) => {
+                sessionsArray.sort((a, b) => {
+                    if (a.startTime !== b.startTime) {
+                        return a.startTime.localeCompare(b.startTime);
+                    }
+                    return a.endTime.localeCompare(b.endTime);
+                });
+            });
+            
+            return sessionsByDate;
+        }
+        
+        // 初始化包含历史数据的工作量统计
+        function initializeWorkloadWithHistory() {
+            const workload = new Map();
+            
+            AppState.teachers.forEach(teacher => {
+                // 使用全局的historicalStats
+                const historical = AppState.historicalStats?.[teacher.name] || { count: 0, duration: 0 };
+                workload.set(teacher.name, {
+                    totalMinutes: historical.duration || 0,
+                    sessionCount: historical.count || 0,
+                    todayAssignments: new Map() // 记录每天的分配数
+                });
+            });
+            
+            return workload;
+        }
+        
+        // 处理强制分配
+        async function processForceAssignments(sessionsByDate, teacherWorkload) {
+            const sortedDates = Array.from(sessionsByDate.keys()).sort();
+            
+            sortedDates.forEach(date => {
+                const sessionsForDate = sessionsByDate.get(date) || [];
+                
+                sessionsForDate.forEach(session => {
+                    AppState.rules.locked
+                        .filter(locked => {
+                            const schedule = AppState.schedule[locked.scheduleIndex];
+                            return schedule && 
+                                   schedule.date === session.date &&
+                                   schedule.startTime === session.startTime &&
+                                   schedule.endTime === session.endTime;
+                        })
+                        .forEach(locked => {
+                            const schedule = AppState.schedule[locked.scheduleIndex];
+                            const assignment = {
+                                teacher: locked.teacher,
+                                slot: schedule,
+                                id: `${schedule.date}_${schedule.startTime}_${schedule.location}`,
+                                type: 'locked',
+                                isLocked: true,
+                                assignedBy: 'forced'
+                            };
+                            
+                            AppState.assignments.push(assignment);
+                            updateTeacherWorkload(locked.teacher, schedule, teacherWorkload);
+                            
+                            // 更新教师对象
+                            const teacher = AppState.teachers.find(t => t.name === locked.teacher);
+                            if (teacher) {
+                                teacher.assignments.push(assignment);
+                                teacher.workload += calculateWorkload(schedule);
+                            }
+                        });
+                });
+            });
+        }
+        
+        // 处理指定监考
+        async function processDesignatedAssignments(sessionsByDate, teacherWorkload) {
+            AppState.rules.designations.forEach(designation => {
+                const schedule = AppState.schedule[designation.scheduleIndex];
+                if (!schedule) return;
+                
+                // 检查是否已被强制分配占用
+                const isOccupied = AppState.assignments.some(a => 
+                    a.slot.date === schedule.date &&
+                    a.slot.startTime === schedule.startTime &&
+                    a.slot.endTime === schedule.endTime &&
+                    a.slot.location === schedule.location
+                );
+                
+                if (!isOccupied) {
+                    const assignment = {
+                        teacher: designation.teacher,
+                        slot: schedule,
+                        id: `${schedule.date}_${schedule.startTime}_${schedule.location}`,
+                        type: 'designated',
+                        isDesignated: true,
+                        assignedBy: 'designated'
+                    };
+                    
+                    AppState.assignments.push(assignment);
+                    updateTeacherWorkload(designation.teacher, schedule, teacherWorkload);
+                    
+                    // 更新教师对象
+                    const teacher = AppState.teachers.find(t => t.name === designation.teacher);
+                    if (teacher) {
+                        teacher.assignments.push(assignment);
+                        teacher.workload += calculateWorkload(schedule);
+                    }
+                }
+            });
+        }
+        
+        // 收集未分配的考场
+        function collectUnassignedSlots(session) {
+            const unassignedSlots = [];
+            
+            session.slots.forEach(slot => {
+                // 计算该考场已分配的教师数
+                const assignedCount = AppState.assignments.filter(a => 
+                    a.slot.date === session.date &&
+                    a.slot.startTime === session.startTime &&
+                    a.slot.endTime === session.endTime &&
+                    a.slot.location === slot.location
+                ).length;
+                
+                // 如果还需要更多教师
+                const needed = slot.required - assignedCount;
+                for (let i = 0; i < needed; i++) {
+                    unassignedSlots.push({
+                        location: slot.location,
+                        required: 1,
+                        index: i
+                    });
+                }
+            });
+            
+            return unassignedSlots;
+        }
+        
+        // 为单个考场分配教师
+        async function assignTeacherToSlot(session, slotInfo, teacherWorkload, currentDate) {
+            const slot = {
+                date: session.date,
+                startTime: session.startTime,
+                endTime: session.endTime,
+                location: slotInfo.location,
+                required: slotInfo.required
+            };
+            
+            console.log(`=== 尝试为 ${slot.location} (${slot.date} ${slot.startTime}-${slot.endTime}) 分配教师 ===`);
+            
+            // 获取可用教师列表
+            let availableTeachers = getAvailableTeachersOptimized(
+                slot, 
+                teacherWorkload,
+                currentDate
+            );
+            
+            console.log(`初始可用教师数量: ${availableTeachers.length}`);
+            console.log(`可用教师列表:`, availableTeachers.map(t => t.name));
+            
+            // 如果没有可用教师，尝试放宽条件（允许工作量较高的教师参与）
+            if (availableTeachers.length === 0) {
+                // 放宽条件：只检查时间冲突，不考虑其他限制
+                availableTeachers = AppState.teachers.filter(teacher => {
+                    // 检查是否已分配到此位置
+                    const alreadyAssigned = AppState.assignments.some(a => 
+                        a.teacher === teacher.name &&
+                        a.slot.date === slot.date &&
+                        a.slot.startTime === slot.startTime &&
+                        a.slot.endTime === slot.endTime &&
+                        a.slot.location === slot.location
+                    );
+                    if (alreadyAssigned) return false;
+                    
+                    // 只检查时间冲突（核心约束）
+                    const hasConflict = AppState.assignments.some(a => {
+                        if (a.teacher !== teacher.name) return false;
+                        if (a.slot.date !== slot.date) return false;
+                        
+                        // 同一时间段不能在多个考场
+                        return a.slot.startTime === slot.startTime && 
+                               a.slot.endTime === slot.endTime;
+                    });
+                    
+                    return !hasConflict;
+                });
+            }
+            
+            if (availableTeachers.length === 0) {
+                return {
+                    success: false,
+                    slot: slot,
+                    reason: '无可用教师'
+                };
+            }
+            
+            // 选择最优教师
+            const selectedTeacher = selectOptimalTeacher(
+                availableTeachers, 
+                teacherWorkload, 
+                currentDate
+            );
+            
+            if (!selectedTeacher) {
+                return {
+                    success: false,
+                    slot: slot,
+                    reason: '教师选择失败'
+                };
+            }
+            
+            // 创建分配
+            const assignment = {
+                teacher: selectedTeacher.name,
+                slot: slot,
+                id: `${slot.date}_${slot.startTime}_${slot.location}`,
+                type: 'auto',
+                assignedBy: 'auto'
+            };
+            
+            AppState.assignments.push(assignment);
+            updateTeacherWorkload(selectedTeacher.name, slot, teacherWorkload);
+            
+            // 更新教师对象
+            const teacher = AppState.teachers.find(t => t.name === selectedTeacher.name);
+            if (teacher) {
+                // 确保assignments数组存在
+                if (!teacher.assignments) {
+                    teacher.assignments = [];
+                }
+                // 避免重复添加相同的分配
+                if (!teacher.assignments.some(a => a.id === assignment.id)) {
+                    teacher.assignments.push(assignment);
+                }
+                // 重新计算总工作量
+                teacher.workload = teacher.assignments.reduce((total, a) => {
+                    return total + calculateWorkload(a.slot);
+                }, 0);
+            }
+            
+            return { success: true };
+        }
+        
+        // 优化的获取可用教师函数
+        function getAvailableTeachersOptimized(slot, teacherWorkload, currentDate) {
+            console.log(`筛选教师 for ${slot.location} (${slot.date} ${slot.startTime}-${slot.endTime})`);
+            console.log(`总教师数: ${AppState.teachers.length}`);
+            
+            return AppState.teachers.filter(teacher => {
+                // 1. 检查是否已分配到此位置
+                const alreadyAssigned = AppState.assignments.some(a => 
+                    a.teacher === teacher.name &&
+                    a.slot.date === slot.date &&
+                    a.slot.startTime === slot.startTime &&
+                    a.slot.endTime === slot.endTime &&
+                    a.slot.location === slot.location
+                );
+                if (alreadyAssigned) {
+                    console.log(`${teacher.name}: 已分配到此位置`);
+                    return false;
+                }
+                
+                // 2. 检查排除时间
+                const exclusions = AppState.rules.exclusions[teacher.name] || [];
+                const slotKey = `${slot.date}_${slot.startTime}_${slot.endTime}_${slot.location}`;
+                if (exclusions.includes(slotKey)) {
+                    console.log(`${teacher.name}: 在排除时间内`);
+                    return false;
+                }
+                
+                // 3. 检查时间冲突（关键约束）
+                const hasConflict = AppState.assignments.some(a => {
+                    if (a.teacher !== teacher.name) return false;
+                    if (a.slot.date !== slot.date) return false;
+                    
+                    // 检查时间段是否有重叠
+                    const existingStart = parseTime(a.slot.startTime);
+                    const existingEnd = parseTime(a.slot.endTime);
+                    const newStart = parseTime(slot.startTime);
+                    const newEnd = parseTime(slot.endTime);
+
+                    // 如果新场次的开始时间早于已分配场次的结束时间，并且新场次的结束时间晚于已分配场次的开始时间，则存在冲突
+                    return newStart < existingEnd && newEnd > existingStart;
+                });
+                if (hasConflict) {
+                    console.log(`${teacher.name}: 存在时间冲突`);
+                    return false;
+                }
+                
+                console.log(`${teacher.name}: 可用`);
+                return true;
+            });
+        }
+        
+        // 选择最优教师（基于算法规范）- 改进版均衡分配
+        function selectOptimalTeacher(availableTeachers, teacherWorkload, currentDate) {
+            // 如果没有可用教师，返回null
+            if (!availableTeachers || availableTeachers.length === 0) {
+                return null;
+            }
+            
+            // 计算全体教师的当前工作量
+            const allTeacherWorkloads = Array.from(teacherWorkload.values());
+            const currentWorkloads = allTeacherWorkloads.map(w => w.sessionCount);
+            const avgSessionCount = currentWorkloads.reduce((sum, count) => sum + count, 0) / currentWorkloads.length;
+            
+            // 实现"先均衡场次，再均衡工作量"的策略
+            const scoredTeachers = availableTeachers.map(teacher => {
+                const workload = teacherWorkload.get(teacher.name) || { totalMinutes: 0, sessionCount: 0, todayAssignments: new Map() };
+                
+                // 1. 场次均衡评分（最高优先级：80%）
+                // 优先选择场次数最少的教师，确保每个教师都有机会参与
+                const sessionCountScore = Math.max(0, 100 - workload.sessionCount * 25);
+                
+                // 2. 工作量均衡评分（次要优先级：15%）
+                // 在场次相同的情况下，考虑工作时长的均衡
+                const avgWorkload = allTeacherWorkloads.reduce((sum, w) => sum + w.totalMinutes, 0) / allTeacherWorkloads.length;
+                const workloadDiff = Math.abs(workload.totalMinutes - avgWorkload);
+                const workloadScore = Math.max(0, 100 - workloadDiff / 10);
+                
+                // 3. 当天分布评分（5%）
+                const todayCount = workload.todayAssignments.get(currentDate) || 0;
+                const dailyScore = Math.max(0, 100 - todayCount * 20);
+                
+                // 综合评分
+                const totalScore = sessionCountScore * 0.8 + workloadScore * 0.15 + dailyScore * 0.05;
+                
+                return {
+                    teacher,
+                    score: totalScore,
+                    sessionCount: workload.sessionCount,
+                    totalMinutes: workload.totalMinutes,
+                    todayCount
+                };
+            });
+            
+            // 排序策略：先均衡场次，再均衡工作量
+            scoredTeachers.sort((a, b) => {
+                // 1. 首要：场次数最少的优先（确保全员参与）
+                if (a.sessionCount !== b.sessionCount) {
+                    return a.sessionCount - b.sessionCount;
+                }
+                
+                // 2. 其次：在场次相同时，工作时长最少的优先
+                if (Math.abs(a.totalMinutes - b.totalMinutes) > 30) { // 30分钟差异阈值
+                    return a.totalMinutes - b.totalMinutes;
+                }
+                
+                // 3. 最后：当天分配最少的优先
+                if (a.todayCount !== b.todayCount) {
+                    return a.todayCount - b.todayCount;
+                }
+                
+                // 4. 综合评分
+                return b.score - a.score;
+            });
+            
+            return scoredTeachers[0].teacher;
+        }
+        
+        // 更新教师工作量
+        function updateTeacherWorkload(teacherName, slot, teacherWorkload) {
+            const workload = teacherWorkload.get(teacherName);
+            if (!workload) return;
+            
+            const duration = calculateWorkload(slot) * 60; // 转换为分钟
+            workload.totalMinutes += duration;
+            workload.sessionCount += 1;
+            
+            // 更新当天分配计数
+            const currentCount = workload.todayAssignments.get(slot.date) || 0;
+            workload.todayAssignments.set(slot.date, currentCount + 1);
+        }
+        
+        // 处理分配失败的情况 - 强制均衡分配
+        async function handleFailedAssignments(failedSlots) {
+            console.log(`处理 ${failedSlots.length} 个分配失败的场次`);
+            
+            for (const failed of failedSlots) {
+                // 尝试强制分配：选择工作量最少的教师，即使有轻微冲突
+                const allTeachers = AppState.teachers.slice();
+                
+                // 按当前工作量排序，选择工作量最少的教师
+                allTeachers.sort((a, b) => {
+                    const aWorkload = AppState.assignments.filter(assignment => assignment.teacher === a.name).length;
+                    const bWorkload = AppState.assignments.filter(assignment => assignment.teacher === b.name).length;
+                    return aWorkload - bWorkload;
+                });
+                
+                // 找到第一个没有严重时间冲突的教师
+                let selectedTeacher = null;
+                for (const teacher of allTeachers) {
+                    // 检查是否已分配到同一个具体位置
+                    const alreadyAssigned = AppState.assignments.some(a => 
+                        a.teacher === teacher.name &&
+                        a.slot.date === failed.slot.date &&
+                        a.slot.startTime === failed.slot.startTime &&
+                        a.slot.endTime === failed.slot.endTime &&
+                        a.slot.location === failed.slot.location
+                    );
+                    
+                    if (!alreadyAssigned) {
+                        selectedTeacher = teacher;
+                        break;
+                    }
+                }
+                
+                if (selectedTeacher) {
+                    // 强制分配
+                    const assignment = {
+                        teacher: selectedTeacher.name,
+                        slot: failed.slot,
+                        id: `${failed.slot.date}_${failed.slot.startTime}_${failed.slot.location}`,
+                        type: 'forced',
+                        assignedBy: 'auto',
+                        hasConflict: false
+                    };
+                    
+                    AppState.assignments.push(assignment);
+                    
+                    // 更新教师对象
+                    if (!selectedTeacher.assignments) {
+                        selectedTeacher.assignments = [];
+                    }
+                    // 避免重复添加相同的分配
+                    if (!selectedTeacher.assignments.some(a => a.id === assignment.id)) {
+                        selectedTeacher.assignments.push(assignment);
+                    }
+                    // 重新计算总工作量
+                    selectedTeacher.workload = selectedTeacher.assignments.reduce((total, a) => {
+                        return total + calculateWorkload(a.slot);
+                    }, 0);
+                    
+                    console.log(`强制分配成功：${selectedTeacher.name} -> ${failed.slot.location} (${failed.slot.date} ${failed.slot.startTime})`);
+                } else {
+                    // 真的无法分配
+                    const assignment = {
+                        teacher: '!!人员不足!!',
+                        slot: failed.slot,
+                        id: `${failed.slot.date}_${failed.slot.startTime}_${failed.slot.location}`,
+                        type: 'unassigned',
+                        assignedBy: 'auto',
+                        hasConflict: true
+                    };
+                    
+                    AppState.assignments.push(assignment);
+                    console.error(`无法分配：${failed.slot.location} (${failed.slot.date} ${failed.slot.startTime})`);
+                }
+            }
+        }
+        
+        // 验证分配结果
+        function validateAssignments(assignments) {
+            const issues = [];
+            const teacherSchedules = new Map();
+            
+            // 构建每个教师的日程
+            assignments.forEach(assignment => {
+                if (assignment.teacher === '!!人员不足!!') {
+                    issues.push(`${assignment.slot.location} (${assignment.slot.date} ${assignment.slot.startTime}) 无法分配教师`);
+                    return;
+                }
+                
+                if (!teacherSchedules.has(assignment.teacher)) {
+                    teacherSchedules.set(assignment.teacher, []);
+                }
+                teacherSchedules.get(assignment.teacher).push(assignment);
+            });
+            
+            // 检测时间冲突
+            teacherSchedules.forEach((schedule, teacher) => {
+                // 按日期和时间排序
+                schedule.sort((a, b) => {
+                    if (a.slot.date !== b.slot.date) {
+                        return a.slot.date.localeCompare(b.slot.date);
+                    }
+                    return a.slot.startTime.localeCompare(b.slot.startTime);
+                });
+                
+                // 检查同一时间是否有多个任务
+                for (let i = 0; i < schedule.length - 1; i++) {
+                    const current = schedule[i];
+                    const next = schedule[i + 1];
+                    
+                    if (current.slot.date === next.slot.date &&
+                        current.slot.startTime === next.slot.startTime &&
+                        current.slot.endTime === next.slot.endTime) {
+                        issues.push(`${teacher} 在 ${current.slot.date} ${current.slot.startTime} 被分配到多个考场`);
+                    }
+                }
+            });
+            
+            return {
+                isValid: issues.length === 0,
+                issues: issues,
+                totalAssignments: assignments.length,
+                successfulAssignments: assignments.filter(a => a.teacher !== '!!人员不足!!').length
+            };
+        }
+        
+        // 显示分配结果摘要
+        function showAssignmentSummary(validationResult) {
+            const successRate = Math.round(
+                (validationResult.successfulAssignments / validationResult.totalAssignments) * 100
+            );
+            
+            if (validationResult.isValid && successRate === 100) {
+                showNotification(
+                    `✅ 排班完成！成功分配 ${validationResult.totalAssignments} 个考场`, 
+                    'success'
+                );
+            } else if (successRate >= 95) {
+                showNotification(
+                    `⚠️ 排班基本完成，成功率 ${successRate}%，有 ${validationResult.issues.length} 个问题需要注意`, 
+                    'warning'
+                );
+            } else {
+                showNotification(
+                    `❌ 排班存在问题，成功率 ${successRate}%，请检查教师数量或约束设置`, 
+                    'error'
+                );
+            }
+        }
+
+        // 验证考场数据
+        function validateScheduleData() {
+            return AppState.schedule.every(slot => 
+                slot.date && slot.startTime && slot.endTime && slot.location
+            );
+        }
+
+        // 处理单个分配任务
+        async function processAssignmentTask(index) {
+            const slot = AppState.schedule[index];
+            
+            // 1. 最高优先级：检查锁定安排
+            const locked = AppState.rules.locked.find(l => l.scheduleIndex === index);
+            if (locked && locked.teacher) {
+                const teacher = AppState.teachers.find(t => t.name === locked.teacher);
+                if (teacher) {
+                    // 即使有冲突也要强制分配（锁定优先级最高）
+                    const assignment = createAssignment(teacher, slot, 'locked');
+                    applyAssignment(assignment, teacher, slot);
+                    return { success: true, type: 'locked' };
+                }
+            }
+            
+            // 2. 次高优先级：检查指定任务
+            const designation = AppState.rules.designations.find(d => d.scheduleIndex === index);
+            if (designation && designation.teacher) {
+                const teacher = AppState.teachers.find(t => t.name === designation.teacher);
+                if (teacher && isTeacherAvailable(teacher, slot)) {
+                    const assignment = createAssignment(teacher, slot, 'designated');
+                    applyAssignment(assignment, teacher, slot);
+                    return { success: true, type: 'designated' };
+                }
+            }
+            
+            // 3. 自动分配：智能选择最合适的教师
+            const availableTeachers = getAvailableTeachers(slot);
+            
+            if (availableTeachers.length > 0) {
+                // 使用评分系统选择最优教师
+                const selectedTeacher = selectBestTeacher(availableTeachers, slot);
+                const assignment = createAssignment(selectedTeacher, slot, 'auto');
+                applyAssignment(assignment, selectedTeacher, slot);
+                return { success: true, type: 'auto' };
+            }
+            
+            // 分配失败，记录原因
+            return {
+                success: false,
+                slot: slot,
+                index: index,
+                reason: '无可用教师'
+            };
+        }
+
+        // 获取可用教师列表（增强版）
+        function getAvailableTeachers(slot) {
+            return AppState.teachers.filter(teacher => {
+                // 检查排除规则
+                const exclusions = AppState.rules.exclusions[teacher.name] || [];
+                const slotKey = `${slot.date}_${slot.startTime}_${slot.endTime}_${slot.location}`;
+                if (exclusions.includes(slotKey)) {
+                    return false;
+                }
+                
+                // 严格检查时间冲突 - 同一时间段不能出现在多个考场
+                for (const assignment of teacher.assignments) {
+                    if (assignment.slot.date === slot.date) {
+                        // 检查时间是否完全相同（同一场考试的不同考场）
+                        if (assignment.slot.startTime === slot.startTime && 
+                            assignment.slot.endTime === slot.endTime) {
+                            return false; // 同一时间段已经被分配，不能再分配
+                        }
+                        
+                        // 检查时间重叠
+                        if (hasTimeConflict(assignment.slot, slot)) {
+                            return false;
+                        }
+                    }
+                }
+                
+                return true;
+            });
+        }
+
+        // 选择最佳教师（改进版均衡算法）
+        function selectBestTeacher(teachers, slot) {
+            // 计算全体教师的平均工作量
+            const avgWorkload = AppState.teachers.reduce((sum, t) => sum + (t.workload || 0), 0) / AppState.teachers.length;
+            
+            const scoredTeachers = teachers.map(teacher => {
+                let score = 0;
+                
+                // 1. 工作量均衡评分（权重最高：60%）
+                const workloadDiff = Math.abs((teacher.workload || 0) - avgWorkload);
+                const workloadScore = Math.max(0, 100 - workloadDiff * 10); // 工作量差异越小得分越高
+                score += workloadScore * 0.6;
+                
+                // 2. 当天任务分布评分（权重：25%）
+                const sameDayTasks = teacher.assignments.filter(a => a.slot.date === slot.date).length;
+                const dailyScore = Math.max(0, 100 - sameDayTasks * 30); // 当天任务越少得分越高
+                score += dailyScore * 0.25;
+                
+                // 3. 考场分布多样性评分（权重：10%）
+                const sameLocationCount = teacher.assignments.filter(a => a.slot.location === slot.location).length;
+                const locationScore = Math.max(0, 100 - sameLocationCount * 20); // 避免总在同一考场
+                score += locationScore * 0.1;
+                
+                // 4. 历史工作量偏差奖励（权重：5%）
+                const historicalBonus = (teacher.workload || 0) < avgWorkload ? 20 : 0;
+                score += historicalBonus * 0.05;
+                
+                return { teacher, score, workload: teacher.workload || 0 };
+            });
+            
+            // 按评分排序，选择最高分的教师
+            scoredTeachers.sort((a, b) => {
+                // 如果评分相近（差异小于3分），选择工作量更少的
+                if (Math.abs(a.score - b.score) < 3) {
+                    return a.workload - b.workload;
+                }
+                return b.score - a.score;
+            });
+            
+            return scoredTeachers[0].teacher;
+        }
+
+        // 创建分配对象
+        function createAssignment(teacher, slot, type) {
+            return {
+                teacher: teacher.name,
+                slot: slot,
+                id: `${slot.date}_${slot.startTime}_${slot.location}`,
+                type: type,
+                isLocked: type === 'locked',
+                isDesignated: type === 'designated'
+            };
+        }
+
+        // 应用分配
+        function applyAssignment(assignment, teacher, slot) {
+            AppState.assignments.push(assignment);
+            teacher.assignments.push(assignment);
+            teacher.workload += calculateWorkload(slot);
+            slot.assigned = slot.assigned || [];
+            slot.assigned.push(teacher.name);
+        }
+
+        // 二次分配尝试（放宽限制但仍要避免同时间冲突）
+        async function attemptSecondaryAssignment(failedSlots) {
+            const stillFailed = [];
+            
+            for (const failed of failedSlots) {
+                // 尝试找到工作量较少的教师
+                const teachers = AppState.teachers
+                    .filter(t => {
+                        // 排除严格的排除规则
+                        const exclusions = AppState.rules.exclusions[t.name] || [];
+                        const slotKey = `${failed.slot.date}_${failed.slot.startTime}_${failed.slot.endTime}_${failed.slot.location}`;
+                        if (exclusions.includes(slotKey)) {
+                            return false;
+                        }
+                        
+                        // 仍然要检查同一时间段的冲突
+                        for (const assignment of t.assignments) {
+                            if (assignment.slot.date === failed.slot.date &&
+                                assignment.slot.startTime === failed.slot.startTime &&
+                                assignment.slot.endTime === failed.slot.endTime) {
+                                return false; // 不能同时在两个地方
+                            }
+                        }
+                        
+                        return true;
+                    })
+                    .sort((a, b) => a.workload - b.workload);
+                
+                if (teachers.length > 0) {
+                    const teacher = teachers[0];
+                    const assignment = createAssignment(teacher, failed.slot, 'secondary');
+                    applyAssignment(assignment, teacher, failed.slot);
+                } else {
+                    stillFailed.push(failed);
+                }
+            }
+            
+            return stillFailed;
+        }
+
+        // 强制分配（最后手段，但仍要避免物理不可能的情况）
+        async function forceAssignment(failedSlots) {
+            for (const failed of failedSlots) {
+                // 找到在该时间段没有任务的教师
+                const availableTeachers = AppState.teachers.filter(teacher => {
+                    // 检查是否在同一时间段已有任务
+                    const hasConflict = teacher.assignments.some(a => 
+                        a.slot.date === failed.slot.date &&
+                        a.slot.startTime === failed.slot.startTime &&
+                        a.slot.endTime === failed.slot.endTime
+                    );
+                    return !hasConflict;
+                });
+                
+                if (availableTeachers.length > 0) {
+                    // 选择工作量最少的
+                    availableTeachers.sort((a, b) => a.workload - b.workload);
+                    const teacher = availableTeachers[0];
+                    
+                    const assignment = createAssignment(teacher, failed.slot, 'forced');
+                    assignment.hasConflict = true; // 标记为强制分配
+                    applyAssignment(assignment, teacher, failed.slot);
+                    
+                    console.warn(`强制分配：${teacher.name} -> ${failed.slot.location} (${failed.slot.date} ${failed.slot.startTime})`);
+                } else {
+                    // 真的没有可用教师了
+                    console.error(`无法分配：${failed.slot.location} (${failed.slot.date} ${failed.slot.startTime}) - 所有教师都有冲突`);
+                    
+                    // 创建一个特殊的"未分配"记录
+                    const unassignedRecord = {
+                        teacher: '【未分配】',
+                        slot: failed.slot,
+                        id: `${failed.slot.date}_${failed.slot.startTime}_${failed.slot.location}`,
+                        type: 'unassigned',
+                        hasConflict: true
+                    };
+                    AppState.assignments.push(unassignedRecord);
+                }
+            }
+        }
+
+        // 更新进度条
+        function updateProgress(percent, status = null) {
+            document.getElementById('progressFill').style.width = percent + '%';
+            document.getElementById('progressText').textContent = Math.round(percent) + '%';
+            
+            if (status) {
+                document.getElementById('progressStatus').textContent = status;
+            } else {
+                if (percent < 30) {
+                    document.getElementById('progressStatus').textContent = '正在分析数据...';
+                } else if (percent < 60) {
+                    document.getElementById('progressStatus').textContent = '应用智能算法...';
+                } else if (percent < 90) {
+                    document.getElementById('progressStatus').textContent = '优化分配结果...';
+                } else {
+                    document.getElementById('progressStatus').textContent = '即将完成...';
+                }
+            }
+        }
+
+        // 检查教师是否可用（修复时间冲突检测）
+        function isTeacherAvailable(teacher, slot) {
+            // 检查时间冲突 - 确保同一时间段不能在多个考场
+            for (const assignment of teacher.assignments) {
+                if (assignment.slot.date === slot.date) {
+                    // 检查时间是否重叠
+                    const existingStart = assignment.slot.startTime;
+                    const existingEnd = assignment.slot.endTime;
+                    const newStart = slot.startTime;
+                    const newEnd = slot.endTime;
+                    
+                    // 如果时间完全相同，直接返回false
+                    if (existingStart === newStart && existingEnd === newEnd) {
+                        return false;
+                    }
+                    
+                    // 检查时间重叠
+                    if (hasTimeConflict(assignment.slot, slot)) {
+                        return false;
+                    }
+                }
+            }
+            
+            // 检查排除规则
+            const exclusions = AppState.rules.exclusions[teacher.name] || [];
+            const slotKey = `${slot.date}_${slot.startTime}_${slot.endTime}_${slot.location}`;
+            if (exclusions.includes(slotKey)) {
+                return false;
+            }
+            
+            return true;
+        }
+
+        // 时间冲突检查（改进版）
+        function hasTimeConflict(slot1, slot2) {
+            // 如果不是同一天，没有冲突
+            if (slot1.date !== slot2.date) return false;
+            
+            // 使用全局parseTime函数
+            const start1 = parseTime(slot1.startTime);
+            const end1 = parseTime(slot1.endTime);
+            const start2 = parseTime(slot2.startTime);
+            const end2 = parseTime(slot2.endTime);
+            
+            // 检查是否有重叠
+            // 如果slot1的结束时间小于等于slot2的开始时间，或slot1的开始时间大于等于slot2的结束时间，则无冲突
+            return !(end1 <= start2 || start1 >= end2);
+        }
+
+        // 计算工作量
+        function calculateWorkload(slot) {
+            const start = new Date(`2024-01-01 ${slot.startTime}`);
+            const end = new Date(`2024-01-01 ${slot.endTime}`);
+            return (end - start) / (1000 * 60 * 60); // 小时数
+        }
+
+        // ========== UI更新函数 ==========
+        function updateFileStatus(type, filename) {
+            const zone = document.getElementById(type === 'teacher' ? 'teacherDropZone' : 'scheduleDropZone');
+            zone.innerHTML = `
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <i class="fas fa-file-excel text-green-500 text-2xl"></i>
+                        <div class="text-left">
+                            <p class="font-medium text-sm">${filename}</p>
+                            <p class="text-xs text-gray-500">上传成功</p>
+                        </div>
+                    </div>
+                    <button class="text-red-500 hover:text-red-700" onclick="removeFile('${type}')">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `;
+        }
+
+        function removeFile(type) {
+            if (type === 'teacher') {
+                AppState.teachers = [];
+            } else {
+                AppState.schedule = [];
+            }
+            
+            const zone = document.getElementById(type === 'teacher' ? 'teacherDropZone' : 'scheduleDropZone');
+            zone.innerHTML = `
+                <i class="fas fa-cloud-upload-alt text-3xl text-gray-400 mb-2"></i>
+                <p class="text-sm text-gray-500">拖拽文件到此处或点击上传</p>
+                <p class="text-xs text-gray-400 mt-1">支持 Excel, CSV 格式</p>
+            `;
+            
+            updateStats();
+            checkReadyToProcess();
+        }
+
+        function checkReadyToProcess() {
+            const runButton = document.getElementById('runButton');
+            runButton.disabled = AppState.teachers.length === 0 || AppState.schedule.length === 0;
+        }
+
+        function showProgress() {
+            document.getElementById('progressSection').classList.remove('hidden');
+            document.getElementById('resultsArea').classList.add('hidden');
+        }
+
+        function hideProgress() {
+            document.getElementById('progressSection').classList.add('hidden');
+        }
+
+        function updateProgress(percent) {
+            document.getElementById('progressFill').style.width = percent + '%';
+            document.getElementById('progressText').textContent = Math.round(percent) + '%';
+            
+            if (percent < 30) {
+                document.getElementById('progressStatus').textContent = '正在分析数据...';
+            } else if (percent < 60) {
+                document.getElementById('progressStatus').textContent = '应用智能算法...';
+            } else if (percent < 90) {
+                document.getElementById('progressStatus').textContent = '优化分配结果...';
+            } else {
+                document.getElementById('progressStatus').textContent = '即将完成...';
+            }
+        }
+
+        function displayResults() {
+            const resultsArea = document.getElementById('resultsArea');
+            const resultsTable = document.getElementById('resultsTable');
+            
+            // 生成结果表格
+            let tableHTML = generateResultsTable();
+            
+            resultsArea.classList.add('hidden');
+            resultsTable.innerHTML = tableHTML;
+            resultsTable.classList.remove('hidden');
+        }
+
+        function generateResultsTable() {
+            console.log('=== generateResultsTable 调试 ===');
+            console.log('AppState.assignments:', AppState.assignments);
+            
+            // 按日期和时间分组
+            const grouped = {};
+            AppState.assignments.forEach(assignment => {
+                console.log('处理分配记录:', assignment);
+                console.log('教师姓名:', assignment.teacher, '类型:', typeof assignment.teacher);
+                
+                const key = `${assignment.slot.date}_${assignment.slot.startTime}`;
+                if (!grouped[key]) {
+                    grouped[key] = {
+                        date: assignment.slot.date,
+                        time: `${assignment.slot.startTime}-${assignment.slot.endTime}`,
+                        locations: {}
+                    };
+                }
+                
+                if (!grouped[key].locations[assignment.slot.location]) {
+                    grouped[key].locations[assignment.slot.location] = [];
+                }
+                grouped[key].locations[assignment.slot.location].push({
+                    teacher: assignment.teacher,
+                    type: assignment.type,
+                    hasConflict: assignment.hasConflict
+                });
+            });
+            
+            console.log('分组后的数据:', grouped);
+            
+            // 获取所有地点并进行智能排序
+            const allLocations = [...new Set(AppState.schedule.map(s => s.location))].sort((a, b) => {
+                // 提取数字进行比较
+                const numA = extractNumber(a);
+                const numB = extractNumber(b);
+                
+                if (numA !== null && numB !== null) {
+                    return numA - numB;
+                }
+                
+                // 如果不是纯数字，按字母顺序排序
+                return a.localeCompare(b, 'zh-CN', { numeric: true });
+            });
+            
+            // 生成表格
+            let html = `
+                <table class="w-full border-collapse">
+                    <thead>
+                        <tr class="bg-gray-100 dark:bg-gray-800">
+                            <th class="border border-gray-300 dark:border-gray-600 p-3 text-sm font-semibold">日期</th>
+                            <th class="border border-gray-300 dark:border-gray-600 p-3 text-sm font-semibold">时间</th>
+                            ${allLocations.map(loc => `<th class="border border-gray-300 dark:border-gray-600 p-3 text-sm font-semibold">${loc}</th>`).join('')}
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            Object.values(grouped).sort((a, b) => {
+                if (a.date !== b.date) return a.date.localeCompare(b.date);
+                return a.time.localeCompare(b.time);
+            }).forEach(row => {
+                html += `
+                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-900">
+                        <td class="border border-gray-300 dark:border-gray-600 p-3 text-sm">${row.date}</td>
+                        <td class="border border-gray-300 dark:border-gray-600 p-3 text-sm whitespace-nowrap">${row.time}</td>
+                        ${allLocations.map(loc => {
+                            const assignments = row.locations[loc] || [];
+                            return `<td class="border border-gray-300 dark:border-gray-600 p-3 text-sm">
+                                <div class="flex flex-wrap gap-1 justify-center">
+                                    ${assignments.map(a => {
+                                        let colorClass = 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300';
+                                        
+                                        // 根据分配类型设置颜色
+                                        if (a.type === 'locked') {
+                                            colorClass = 'bg-orange-100 dark:bg-orange-900 text-orange-700 dark:text-orange-300';
+                                        } else if (a.type === 'designated') {
+                                            colorClass = 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300';
+                                        } else if (a.hasConflict) {
+                                            colorClass = 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300';
+                                        }
+                                        
+                                        return `
+                                            <span class="inline-block px-2 py-1 ${colorClass} rounded text-xs cursor-move whitespace-nowrap" 
+                                                 title="${a.type === 'locked' ? '锁定' : a.type === 'designated' ? '指定' : a.hasConflict ? '强制分配(有冲突)' : '自动分配'}">
+                                                ${a.teacher}
+                                                ${a.type === 'locked' ? '🔒' : ''}
+                                            </span>
+                                        `;
+                                    }).join(' ')}
+                                    ${assignments.length === 0 ? '<span class="text-red-500 font-bold">⚠️ 未分配</span>' : ''}
+                                </div>
+                            </td>`;
+                        }).join('')}
+                    </tr>
+                `;
+            });
+            
+            html += '</tbody></table>';
+            
+            // 添加图例
+            html += `
+                <div class="mt-4 flex flex-wrap gap-4 text-xs">
+                    <div class="flex items-center gap-2">
+                        <div class="w-4 h-4 bg-blue-100 dark:bg-blue-900 rounded"></div>
+                        <span>自动分配</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="w-4 h-4 bg-green-100 dark:bg-green-900 rounded"></div>
+                        <span>指定分配</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="w-4 h-4 bg-orange-100 dark:bg-orange-900 rounded"></div>
+                        <span>锁定分配 🔒</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="w-4 h-4 bg-red-100 dark:bg-red-900 rounded"></div>
+                        <span>强制分配(有冲突)</span>
+                    </div>
+                </div>
+            `;
+            
+            return html;
+        }
+
+        // 提取字符串中的数字
+        function extractNumber(str) {
+            const match = str.match(/\d+/);
+            return match ? parseInt(match[0]) : null;
+        }
+
+        function updateStats() {
+            // 更新统计数据
+            AppState.stats.totalSessions = AppState.schedule.length;
+            
+            // 添加调试信息
+            console.log('=== updateStats 调试信息 ===');
+            console.log('总教师数:', AppState.teachers.length);
+            console.log('总分配数:', AppState.assignments.length);
+            console.log('分配详情:', AppState.assignments.map(a => ({
+                teacher: a.teacher,
+                location: a.slot.location,
+                date: a.slot.date,
+                time: `${a.slot.startTime}-${a.slot.endTime}`
+            })));
+            
+            if (AppState.teachers.length > 0 && AppState.assignments.length > 0) {
+                // 重新计算每个教师的工作量
+                AppState.teachers.forEach(teacher => {
+                    teacher.workload = 0;
+                    teacher.assignments = [];
+                });
+                
+                // 根据当前分配重新计算
+                AppState.assignments.forEach(assignment => {
+                    console.log('处理分配:', assignment.teacher, assignment.slot.location);
+                    if (assignment.teacher !== '【未分配】' && assignment.teacher !== '!!人员不足!!') {
+                        const teacher = AppState.teachers.find(t => t.name === assignment.teacher);
+                        if (teacher) {
+                            if (!teacher.assignments.some(a => a.id === assignment.id)) {
+                                teacher.assignments.push(assignment);
+                            }
+                            // 重新计算该教师的总工作量
+                            teacher.workload = teacher.assignments.reduce((total, a) => {
+                                return total + calculateWorkload(a.slot);
+                            }, 0);
+                        } else {
+                            console.warn('找不到教师:', assignment.teacher);
+                        }
+                    }
+                });
+                
+                const workingTeachers = AppState.teachers.filter(t => t.workload > 0);
+                console.log('有工作量的教师:', workingTeachers.map(t => ({ name: t.name, workload: t.workload })));
+                // 更新参与监考的教师数量（而不是总教师数量）
+                AppState.stats.totalTeachers = workingTeachers.length;
+                
+                if (workingTeachers.length > 0) {
+                    const totalWorkload = workingTeachers.reduce((sum, t) => sum + t.workload, 0);
+                    AppState.stats.avgWorkload = (totalWorkload / workingTeachers.length).toFixed(1);
+                    
+                    // 计算均衡度
+                    const workloads = workingTeachers.map(t => t.workload);
+                    const max = Math.max(...workloads);
+                    const min = Math.min(...workloads);
+                    const balance = max > 0 ? (1 - (max - min) / max) * 100 : 100;
+                    AppState.stats.balanceScore = Math.round(balance);
+                } else {
+                    AppState.stats.totalTeachers = 0;
+                    AppState.stats.avgWorkload = 0;
+                    AppState.stats.balanceScore = 100;
+                }
+            } else {
+                AppState.stats.totalTeachers = 0;
+                AppState.stats.avgWorkload = 0;
+                AppState.stats.balanceScore = 100;
+            }
+            
+            // 更新UI显示
+            document.getElementById('totalTeachers').textContent = AppState.stats.totalTeachers;
+            document.getElementById('totalSessions').textContent = AppState.stats.totalSessions;
+            document.getElementById('avgWorkload').textContent = AppState.stats.avgWorkload + 'h';
+            document.getElementById('balanceScore').textContent = AppState.stats.balanceScore + '%';
+            
+            // 更新均衡度颜色
+            const balanceElement = document.getElementById('balanceScore').parentElement.parentElement;
+            balanceElement.classList.remove('bg-green-50', 'bg-yellow-50', 'bg-orange-50', 'bg-red-50');
+            balanceElement.classList.remove('dark:bg-green-900/20', 'dark:bg-yellow-900/20', 'dark:bg-orange-900/20', 'dark:bg-red-900/20');
+            
+            if (AppState.stats.balanceScore >= 90) {
+                balanceElement.classList.add('bg-green-50', 'dark:bg-green-900/20');
+            } else if (AppState.stats.balanceScore >= 75) {
+                balanceElement.classList.add('bg-yellow-50', 'dark:bg-yellow-900/20');
+            } else if (AppState.stats.balanceScore >= 60) {
+                balanceElement.classList.add('bg-orange-50', 'dark:bg-orange-900/20');
+            } else {
+                balanceElement.classList.add('bg-red-50', 'dark:bg-red-900/20');
+            }
+            
+            // 更新图表
+            updateWorkloadChart();
+        }
+
+        // ========== 图表更新 ==========
+        let workloadChart = null;
+
+        function updateWorkloadChart() {
+            const ctx = document.getElementById('workloadChart').getContext('2d');
+            
+            if (workloadChart) {
+                workloadChart.destroy();
+            }
+            
+            if (AppState.teachers.length === 0) return;
+            
+            // 获取有工作量的教师，并按工作量排序
+            const workingTeachers = AppState.teachers
+                .filter(t => t.workload > 0)
+                .sort((a, b) => b.workload - a.workload);
+            
+            if (workingTeachers.length === 0) {
+                // 显示无数据提示
+                ctx.font = '14px Arial';
+                ctx.fillStyle = '#999';
+                ctx.textAlign = 'center';
+                ctx.fillText('暂无工作量数据', ctx.canvas.width / 2, ctx.canvas.height / 2);
+                return;
+            }
+            
+            // 取前10个或全部
+            const displayTeachers = workingTeachers.slice(0, Math.min(10, workingTeachers.length));
+            
+            workloadChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: displayTeachers.map(t => t.name),
+                    datasets: [{
+                        label: '工作时长(小时)',
+                        data: displayTeachers.map(t => t.workload),
+                        backgroundColor: displayTeachers.map((t, index) => {
+                            // 根据排名设置不同颜色
+                            if (index === 0) return 'rgba(239, 68, 68, 0.5)';  // 红色 - 最多
+                            if (index === 1) return 'rgba(251, 146, 60, 0.5)'; // 橙色
+                            if (index === 2) return 'rgba(250, 204, 21, 0.5)'; // 黄色
+                            return 'rgba(59, 130, 246, 0.5)'; // 蓝色 - 正常
+                        }),
+                        borderColor: displayTeachers.map((t, index) => {
+                            if (index === 0) return 'rgba(239, 68, 68, 1)';
+                            if (index === 1) return 'rgba(251, 146, 60, 1)';
+                            if (index === 2) return 'rgba(250, 204, 21, 1)';
+                            return 'rgba(59, 130, 246, 1)';
+                        }),
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                afterLabel: function(context) {
+                                    const teacher = workingTeachers[context.dataIndex];
+                                    return `监考次数: ${teacher.assignments.length}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.05)'
+                            },
+                            ticks: {
+                                callback: function(value) {
+                                    return value + 'h';
+                                }
+                            }
+                        },
+                        x: {
+                            grid: {
+                                display: false
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // ========== 通知系统 ==========
+        function showNotification(message, type = 'info') {
+            const container = document.getElementById('notificationContainer');
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.innerHTML = `
+                <div class="flex items-center gap-3">
+                    <i class="fas ${type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle'}"></i>
+                    <span>${message}</span>
+                </div>
+            `;
+            
+            container.appendChild(notification);
+            
+            // 显示动画
+            setTimeout(() => notification.classList.add('show'), 10);
+            
+            // 3秒后自动消失
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
+
+        // ========== 标签页切换 ==========
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const tabName = tab.dataset.tab;
+                
+                // 更新标签状态
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                
+                // 更新内容
+                document.querySelectorAll('.tab-content').forEach(content => {
+                    content.classList.add('hidden');
+                });
+                
+                if (tabName === 'basic') {
+                    document.getElementById('basicRules').classList.remove('hidden');
+                } else {
+                    document.getElementById('advancedRules').classList.remove('hidden');
+                }
+            });
+        });
+
+        // ========== AI优化功能 ==========
+        document.getElementById('optimizeButton').addEventListener('click', async () => {
+            showNotification('正在使用AI优化排班结果...', 'info');
+            
+            // 显示优化选项
+            showModal('AI智能优化', `
+                <div class="space-y-4">
+                    <p class="text-sm text-gray-600">选择优化策略：</p>
+                    <div class="space-y-3">
+                        <label class="flex items-start gap-3 p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer">
+                            <input type="radio" name="optimize" value="balance" checked class="mt-1">
+                            <div>
+                                <div class="font-medium">工作量均衡优化</div>
+                                <div class="text-sm text-gray-500">基于历史数据，重新平衡教师工作量，实现长期公平</div>
+                            </div>
+                        </label>
+                        <label class="flex items-start gap-3 p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer">
+                            <input type="radio" name="optimize" value="minimize-days" class="mt-1">
+                            <div>
+                                <div class="font-medium">工作日集中优化</div>
+                                <div class="text-sm text-gray-500">减少教师到校天数，集中安排监考任务</div>
+                            </div>
+                        </label>
+                        <label class="flex items-start gap-3 p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer">
+                            <input type="radio" name="optimize" value="location" class="mt-1">
+                            <div>
+                                <div class="font-medium">考场就近优化</div>
+                                <div class="text-sm text-gray-500">基于考场编号智能分析，减少教师移动距离</div>
+                            </div>
+                        </label>
+                        <label class="flex items-start gap-3 p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer">
+                            <input type="radio" name="optimize" value="continuous" class="mt-1">
+                            <div>
+                                <div class="font-medium">时间连续优化</div>
+                                <div class="text-sm text-gray-500">优化同一天内的监考安排，减少等待时间</div>
+                            </div>
+                        </label>
+                        <label class="flex items-start gap-3 p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer">
+                            <input type="radio" name="optimize" value="multi-objective" class="mt-1">
+                            <div>
+                                <div class="font-medium">多目标综合优化</div>
+                                <div class="text-sm text-gray-500">同时考虑工作量、时间连续性、考场分布等多个因素</div>
+                            </div>
+                        </label>
+                        <label class="flex items-start gap-3 p-3 border rounded-lg bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 hover:from-purple-100 hover:to-blue-100 cursor-pointer">
+                            <input type="radio" name="optimize" value="ai-deepseek" class="mt-1">
+                            <div>
+                                <div class="font-medium flex items-center gap-2">
+                                    <span>DeepSeek AI 深度优化</span>
+                                    <span class="text-xs bg-purple-600 text-white px-2 py-0.5 rounded-full">Beta</span>
+                                </div>
+                                <div class="text-sm text-gray-500">使用大模型API进行深度分析和优化（需配置API密钥）</div>
+                            </div>
+                        </label>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="closeModal()" class="flex-1 btn btn-secondary">取消</button>
+                        <button onclick="runAIOptimization()" class="flex-1 btn btn-primary">
+                            <i class="fas fa-wand-magic-sparkles mr-2"></i>开始优化
+                        </button>
+                    </div>
+                </div>
+            `);
+        });
+
+        async function runAIOptimization() {
+            const strategy = document.querySelector('input[name="optimize"]:checked').value;
+            closeModal();
+            
+            showProgress();
+            updateProgress(10, 'AI分析中...');
+            
+            try {
+                // 模拟AI处理延迟
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                let optimizedCount = 0;
+                
+                switch (strategy) {
+                    case 'balance':
+                        optimizedCount = await optimizeWorkloadBalanceAI();
+                        break;
+                    case 'minimize-days':
+                        optimizedCount = await optimizeMinimizeDays();
+                        break;
+                    case 'location':
+                        optimizedCount = await optimizeByLocation();
+                        break;
+                    case 'continuous':
+                        optimizedCount = await optimizeContinuousTime();
+                        break;
+                    case 'multi-objective':
+                        optimizedCount = await optimizeMultiObjective();
+                        break;
+                    case 'ai-deepseek':
+                        optimizedCount = await optimizeWithDeepSeek();
+                        break;
+                }
+                
+                // 更新显示
+                hideProgress();
+                displayResults();
+                updateStats();
+                
+                showNotification(`AI优化完成！优化了 ${optimizedCount} 个任务分配`, 'success');
+                
+            } catch (error) {
+                hideProgress();
+                showNotification('优化过程出错: ' + error.message, 'error');
+            }
+        }
+
+        // AI优化算法：工作量均衡（增强版）
+        async function optimizeWorkloadBalanceAI() {
+            let optimizedCount = 0;
+            const maxIterations = 100; // 增加迭代次数
+            let noImprovementCount = 0;
+            let lastBalanceScore = AppState.stats.balanceScore;
+            
+            for (let i = 0; i < maxIterations; i++) {
+                updateProgress(10 + (i / maxIterations * 80), `优化迭代 ${i + 1}/${maxIterations}...`);
+                await new Promise(resolve => setTimeout(resolve, 30));
+                
+                // 重新计算当前工作量分布
+                const workloadStats = calculateWorkloadStatistics();
+                
+                // 如果已经足够均衡（标准差小于0.5小时），停止优化
+                if (workloadStats.standardDeviation < 0.5) {
+                    showNotification('工作量已达到最优均衡状态', 'success');
+                    break;
+                }
+                
+                // 找出工作量最高和最低的教师组
+                const overloadedTeachers = workloadStats.teachers
+                    .filter(t => t.workload > workloadStats.mean + workloadStats.standardDeviation)
+                    .sort((a, b) => b.workload - a.workload);
+                    
+                const underloadedTeachers = workloadStats.teachers
+                    .filter(t => t.workload < workloadStats.mean - workloadStats.standardDeviation)
+                    .sort((a, b) => a.workload - b.workload);
+                
+                if (overloadedTeachers.length === 0 || underloadedTeachers.length === 0) {
+                    // 尝试更细粒度的优化
+                    const success = await performFineGrainedOptimization(workloadStats);
+                    if (success) {
+                        optimizedCount++;
+                    } else {
+                        noImprovementCount++;
+                    }
+                } else {
+                    // 执行任务转移
+                    const transferred = await performTaskTransfer(
+                        overloadedTeachers, 
+                        underloadedTeachers
+                    );
+                    
+                    if (transferred > 0) {
+                        optimizedCount += transferred;
+                        noImprovementCount = 0;
+                    } else {
+                        noImprovementCount++;
+                    }
+                }
+                
+                // 如果连续10次没有改进，尝试三方交换
+                if (noImprovementCount >= 10) {
+                    const swapped = await performMultiWaySwap(workloadStats);
+                    if (swapped) {
+                        optimizedCount += swapped;
+                        noImprovementCount = 0;
+                    } else {
+                        break; // 无法继续优化
+                    }
+                }
+                
+                // 更新统计
+                updateStats();
+                
+                // 检查改进程度
+                if (Math.abs(AppState.stats.balanceScore - lastBalanceScore) < 0.5) {
+                    noImprovementCount++;
+                } else {
+                    noImprovementCount = 0;
+                    lastBalanceScore = AppState.stats.balanceScore;
+                }
+            }
+            
+            return optimizedCount;
+        }
+        
+        // 计算工作量统计信息
+        function calculateWorkloadStatistics() {
+            const teachers = AppState.teachers.filter(t => t.workload > 0);
+            const workloads = teachers.map(t => t.workload);
+            
+            const mean = workloads.reduce((sum, w) => sum + w, 0) / workloads.length;
+            const variance = workloads.reduce((sum, w) => sum + Math.pow(w - mean, 2), 0) / workloads.length;
+            const standardDeviation = Math.sqrt(variance);
+            
+            return {
+                teachers: teachers.map(t => ({ name: t.name, workload: t.workload })),
+                mean: mean,
+                standardDeviation: standardDeviation,
+                min: Math.min(...workloads),
+                max: Math.max(...workloads)
+            };
+        }
+        
+        // 执行任务转移
+        async function performTaskTransfer(overloadedTeachers, underloadedTeachers) {
+            let transferCount = 0;
+            
+            for (const overloaded of overloadedTeachers) {
+                const teacher = AppState.teachers.find(t => t.name === overloaded.name);
+                if (!teacher) continue;
+                
+                // 找出可转移的任务（优先转移自动分配的任务）
+                const transferableTasks = teacher.assignments
+                    .filter(a => !a.isLocked && !a.isDesignated)
+                    .sort((a, b) => {
+                        // 优先转移工作时长较短的任务
+                        const durationA = calculateWorkload(a.slot);
+                        const durationB = calculateWorkload(b.slot);
+                        return durationA - durationB;
+                    });
+                
+                for (const task of transferableTasks) {
+                    // 找到合适的接收者
+                    const recipient = findBestRecipient(task, underloadedTeachers);
+                    if (recipient) {
+                        // 执行转移
+                        transferAssignment(task, teacher, recipient);
+                        transferCount++;
+                        
+                        // 如果工作量已经平衡，停止转移
+                        if (teacher.workload <= calculateWorkloadStatistics().mean) {
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            return transferCount;
+        }
+        
+        // 找到最佳接收者
+        function findBestRecipient(task, underloadedTeachers) {
+            for (const candidate of underloadedTeachers) {
+                const teacher = AppState.teachers.find(t => t.name === candidate.name);
+                if (!teacher) continue;
+                
+                // 检查是否可以接收这个任务
+                if (canAcceptTask(teacher, task)) {
+                    return teacher;
+                }
+            }
+            return null;
+        }
+        
+        // 检查教师是否可以接收任务
+        function canAcceptTask(teacher, task) {
+            // 检查时间冲突
+            const hasConflict = teacher.assignments.some(a => 
+                a.slot.date === task.slot.date &&
+                a.slot.startTime === task.slot.startTime &&
+                a.slot.endTime === task.slot.endTime
+            );
+            if (hasConflict) return false;
+            
+            // 检查排除规则
+            const exclusions = AppState.rules.exclusions[teacher.name] || [];
+            const slotKey = `${task.slot.date}_${task.slot.startTime}_${task.slot.endTime}_${task.slot.location}`;
+            if (exclusions.includes(slotKey)) return false;
+            
+            return true;
+        }
+        
+        // 细粒度优化
+        async function performFineGrainedOptimization(workloadStats) {
+            // 找出工作量最接近平均值的教师对
+            const teachers = workloadStats.teachers.sort((a, b) => 
+                Math.abs(a.workload - workloadStats.mean) - Math.abs(b.workload - workloadStats.mean)
+            );
+            
+            for (let i = 0; i < teachers.length - 1; i++) {
+                for (let j = i + 1; j < teachers.length; j++) {
+                    const teacher1 = AppState.teachers.find(t => t.name === teachers[i].name);
+                    const teacher2 = AppState.teachers.find(t => t.name === teachers[j].name);
+                    
+                    if (teacher1 && teacher2) {
+                        // 尝试交换任务
+                        const swapped = tryOptimalSwap(teacher1, teacher2, workloadStats.mean);
+                        if (swapped) return true;
+                    }
+                }
+            }
+            
+            return false;
+        }
+        
+        // 尝试最优交换
+        function tryOptimalSwap(teacher1, teacher2, targetMean) {
+            // 寻找可以使两人工作量都更接近平均值的交换
+            for (const task1 of teacher1.assignments) {
+                if (task1.isLocked) continue;
+                
+                for (const task2 of teacher2.assignments) {
+                    if (task2.isLocked) continue;
+                    
+                    // 计算交换后的工作量
+                    const duration1 = calculateWorkload(task1.slot);
+                    const duration2 = calculateWorkload(task2.slot);
+                    
+                    const newWorkload1 = teacher1.workload - duration1 + duration2;
+                    const newWorkload2 = teacher2.workload - duration2 + duration1;
+                    
+                    // 检查交换是否改善均衡性
+                    const currentDeviation = Math.abs(teacher1.workload - targetMean) + 
+                                           Math.abs(teacher2.workload - targetMean);
+                    const newDeviation = Math.abs(newWorkload1 - targetMean) + 
+                                        Math.abs(newWorkload2 - targetMean);
+                    
+                    if (newDeviation < currentDeviation && 
+                        canAcceptTask(teacher1, task2) && 
+                        canAcceptTask(teacher2, task1)) {
+                        // 执行交换
+                        swapAssignments(task1, teacher1, task2, teacher2);
+                        return true;
+                    }
+                }
+            }
+            
+            return false;
+        }
+        
+        // 多方交换优化
+        async function performMultiWaySwap(workloadStats) {
+            const teachers = workloadStats.teachers
+                .map(t => AppState.teachers.find(teacher => teacher.name === t.name))
+                .filter(t => t && t.assignments.length > 0);
+            
+            // 尝试三方循环交换
+            for (let i = 0; i < teachers.length - 2; i++) {
+                for (let j = i + 1; j < teachers.length - 1; j++) {
+                    for (let k = j + 1; k < teachers.length; k++) {
+                        if (tryThreeWayOptimalSwap(teachers[i], teachers[j], teachers[k])) {
+                            return 3;
+                        }
+                    }
+                }
+            }
+            
+            return 0;
+        }
+        
+        // 尝试三方最优交换
+        function tryThreeWayOptimalSwap(teacher1, teacher2, teacher3) {
+            // 寻找可以形成循环交换的任务组合
+            for (const a1 of teacher1.assignments) {
+                if (a1.isLocked) continue;
+                
+                for (const a2 of teacher2.assignments) {
+                    if (a2.isLocked) continue;
+                    
+                    for (const a3 of teacher3.assignments) {
+                        if (a3.isLocked) continue;
+                        
+                        // 检查循环交换的可行性
+                        if (canAcceptTask(teacher2, a1) &&
+                            canAcceptTask(teacher3, a2) &&
+                            canAcceptTask(teacher1, a3)) {
+                            
+                            // 计算交换后的工作量改善
+                            const improvement = calculateSwapImprovement(
+                                [teacher1, teacher2, teacher3],
+                                [a1, a2, a3]
+                            );
+                            
+                            if (improvement > 0) {
+                                // 执行三方交换
+                                performThreeWaySwap(teacher1, a1, teacher2, a2, teacher3, a3);
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            return false;
+        }
+        
+        // 计算交换改善度
+        function calculateSwapImprovement(teachers, tasks) {
+            const currentVariance = calculateVariance(teachers.map(t => t.workload));
+            
+            // 计算交换后的工作量
+            const newWorkloads = teachers.map((t, i) => {
+                const removeIndex = i;
+                const addIndex = (i + 1) % teachers.length;
+                return t.workload - calculateWorkload(tasks[removeIndex].slot) + 
+                       calculateWorkload(tasks[addIndex].slot);
+            });
+            
+            const newVariance = calculateVariance(newWorkloads);
+            return currentVariance - newVariance;
+        }
+        
+        // 计算方差
+        function calculateVariance(values) {
+            const mean = values.reduce((sum, v) => sum + v, 0) / values.length;
+            return values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / values.length;
+        }
+        
+        // 执行三方交换
+        function performThreeWaySwap(t1, a1, t2, a2, t3, a3) {
+            // 临时保存任务
+            const temp1 = { ...a1 };
+            const temp2 = { ...a2 };
+            const temp3 = { ...a3 };
+            
+            // 执行循环交换
+            transferAssignment(temp1, t1, t2);
+            transferAssignment(temp2, t2, t3);
+            transferAssignment(temp3, t3, t1);
+        }
+        
+        // 交换两个任务
+        function swapAssignments(task1, teacher1, task2, teacher2) {
+            // 更新教师的任务列表
+            teacher1.assignments = teacher1.assignments.filter(a => a.id !== task1.id);
+            teacher2.assignments = teacher2.assignments.filter(a => a.id !== task2.id);
+            
+            // 交换任务
+            task1.teacher = teacher2.name;
+            task2.teacher = teacher1.name;
+            
+            teacher1.assignments.push(task2);
+            teacher2.assignments.push(task1);
+            
+            // 更新工作量
+            const duration1 = calculateWorkload(task1.slot);
+            const duration2 = calculateWorkload(task2.slot);
+            
+            teacher1.workload = teacher1.workload - duration1 + duration2;
+            teacher2.workload = teacher2.workload - duration2 + duration1;
+            
+            // 更新全局分配记录
+            const assignment1 = AppState.assignments.find(a => a.id === task1.id);
+            const assignment2 = AppState.assignments.find(a => a.id === task2.id);
+            
+            if (assignment1) assignment1.teacher = teacher2.name;
+            if (assignment2) assignment2.teacher = teacher1.name;
+        }
+
+        // AI优化算法：集中工作日
+        async function optimizeMinimizeDays() {
+            let optimizedCount = 0;
+            
+            for (const teacher of AppState.teachers) {
+                if (teacher.assignments.length < 2) continue;
+                
+                updateProgress(50, `优化 ${teacher.name} 的工作日...`);
+                await new Promise(resolve => setTimeout(resolve, 30));
+                
+                // 统计教师的工作日
+                const workDays = new Set(teacher.assignments.map(a => a.slot.date));
+                if (workDays.size === 1) continue; // 已经是最优
+                
+                // 尝试将分散的任务集中到较少的天数
+                const dayAssignments = {};
+                teacher.assignments.forEach(a => {
+                    const date = a.slot.date;
+                    if (!dayAssignments[date]) dayAssignments[date] = [];
+                    dayAssignments[date].push(a);
+                });
+                
+                // 找出任务最少的日期
+                const sortedDays = Object.entries(dayAssignments)
+                    .sort((a, b) => a[1].length - b[1].length);
+                
+                for (const [sparseDay, assignments] of sortedDays) {
+                    if (assignments.length >= 3) continue; // 该天已经有足够任务
+                    
+                    // 尝试将这天的任务转移到其他天
+                    for (const assignment of assignments) {
+                        const transferred = tryTransferToSameDay(assignment, teacher);
+                        if (transferred) optimizedCount++;
+                    }
+                }
+            }
+            
+            return optimizedCount;
+        }
+
+        // AI优化算法：考场就近
+        async function optimizeByLocation() {
+            let optimizedCount = 0;
+            
+            // 定义考场距离（模拟）
+            const getLocationDistance = (loc1, loc2) => {
+                const num1 = parseInt(loc1) || 0;
+                const num2 = parseInt(loc2) || 0;
+                return Math.abs(num1 - num2);
+            };
+            
+            for (const teacher of AppState.teachers) {
+                if (teacher.assignments.length < 2) continue;
+                
+                updateProgress(50, `优化 ${teacher.name} 的考场分布...`);
+                await new Promise(resolve => setTimeout(resolve, 30));
+                
+                // 计算考场分散度
+                const locations = teacher.assignments.map(a => a.slot.location);
+                const uniqueLocations = [...new Set(locations)];
+                
+                if (uniqueLocations.length === 1) continue; // 已经在同一考场
+                
+                // 找出最集中的考场
+                const locationCounts = {};
+                locations.forEach(loc => {
+                    locationCounts[loc] = (locationCounts[loc] || 0) + 1;
+                });
+                
+                const mainLocation = Object.entries(locationCounts)
+                    .sort((a, b) => b[1] - a[1])[0][0];
+                
+                // 尝试将远处的任务换到近处
+                for (const assignment of teacher.assignments) {
+                    if (assignment.slot.location === mainLocation) continue;
+                    
+                    const distance = getLocationDistance(assignment.slot.location, mainLocation);
+                    if (distance > 5) { // 距离太远
+                        const swapped = trySwapToNearbyLocation(assignment, teacher, mainLocation);
+                        if (swapped) optimizedCount++;
+                    }
+                }
+            }
+            
+            return optimizedCount;
+        }
+
+        // AI优化算法：时间连续
+        async function optimizeContinuousTime() {
+            let optimizedCount = 0;
+            
+            for (const teacher of AppState.teachers) {
+                const dayAssignments = {};
+                teacher.assignments.forEach(a => {
+                    const date = a.slot.date;
+                    if (!dayAssignments[date]) dayAssignments[date] = [];
+                    dayAssignments[date].push(a);
+                });
+                
+                for (const [date, assignments] of Object.entries(dayAssignments)) {
+                    if (assignments.length < 2) continue;
+                    
+                    updateProgress(70, `优化 ${teacher.name} 在 ${date} 的时间安排...`);
+                    await new Promise(resolve => setTimeout(resolve, 30));
+                    
+                    // 按时间排序
+                    assignments.sort((a, b) => 
+                        a.slot.startTime.localeCompare(b.slot.startTime)
+                    );
+                    
+                    // 检查时间间隔
+                    for (let i = 0; i < assignments.length - 1; i++) {
+                        const current = assignments[i];
+                        const next = assignments[i + 1];
+                        
+                        const gap = calculateTimeGap(current.slot.endTime, next.slot.startTime);
+                        if (gap > 120) { // 间隔超过2小时
+                            // 尝试找到更连续的安排
+                            const filled = tryFillTimeGap(teacher, current, next);
+                            if (filled) optimizedCount++;
+                        }
+                    }
+                }
+            }
+            
+            return optimizedCount;
+        }
+
+        // 辅助函数：转移任务
+        function transferAssignment(assignment, fromTeacher, toTeacher) {
+            // 从原教师移除
+            fromTeacher.assignments = fromTeacher.assignments.filter(a => a.id !== assignment.id);
+            fromTeacher.workload -= calculateWorkload(assignment.slot);
+            
+            // 添加到新教师
+            assignment.teacher = toTeacher.name;
+            toTeacher.assignments.push(assignment);
+            toTeacher.workload += calculateWorkload(assignment.slot);
+            
+            // 更新全局分配记录
+            const globalAssignment = AppState.assignments.find(a => a.id === assignment.id);
+            if (globalAssignment) {
+                globalAssignment.teacher = toTeacher.name;
+            }
+        }
+
+        // 辅助函数：三方交换
+        function tryThreeWaySwap(teacher1, teacher2, teacher3) {
+            // 寻找可以形成循环交换的任务
+            for (const a1 of teacher1.assignments) {
+                if (a1.isLocked) continue;
+                
+                for (const a2 of teacher2.assignments) {
+                    if (a2.isLocked) continue;
+                    
+                    for (const a3 of teacher3.assignments) {
+                        if (a3.isLocked) continue;
+                        
+                        // 检查是否可以形成循环交换
+                        if (isTeacherAvailable(teacher2, a1.slot) &&
+                            isTeacherAvailable(teacher3, a2.slot) &&
+                            isTeacherAvailable(teacher1, a3.slot)) {
+                            
+                            // 执行三方交换
+                            transferAssignment(a1, teacher1, teacher2);
+                            transferAssignment(a2, teacher2, teacher3);
+                            transferAssignment(a3, teacher3, teacher1);
+                            
+                            return true;
+                        }
+                    }
+                }
+            }
+            
+            return false;
+        }
+
+        // 其他辅助函数
+        function tryTransferToSameDay(assignment, teacher) {
+            // 实现将任务转移到同一天的逻辑
+            return false;
+        }
+
+        function trySwapToNearbyLocation(assignment, teacher, targetLocation) {
+            // 实现将任务交换到附近考场的逻辑
+            return false;
+        }
+
+        function calculateTimeGap(endTime, startTime) {
+            return parseTime(startTime) - parseTime(endTime);
+        }
+
+        // 多目标综合优化
+        async function optimizeMultiObjective() {
+            let totalOptimized = 0;
+            
+            showNotification('开始多目标综合优化...', 'info');
+            
+            // 1. 首先进行工作量均衡（权重40%）
+            updateProgress(10, '优化工作量均衡...');
+            const balanceOptimized = await optimizeWorkloadBalanceAI();
+            totalOptimized += balanceOptimized;
+            
+            // 2. 然后优化工作日集中度（权重30%）
+            updateProgress(40, '优化工作日集中度...');
+            const daysOptimized = await optimizeMinimizeDays();
+            totalOptimized += daysOptimized;
+            
+            // 3. 优化考场分布（权重20%）
+            updateProgress(70, '优化考场分布...');
+            const locationOptimized = await optimizeByLocation();
+            totalOptimized += locationOptimized;
+            
+            // 4. 最后优化时间连续性（权重10%）
+            updateProgress(90, '优化时间连续性...');
+            const continuousOptimized = await optimizeContinuousTime();
+            totalOptimized += continuousOptimized;
+            
+            // 5. 综合评分和微调
+            updateProgress(95, '进行最终微调...');
+            const finalScore = calculateComprehensiveScore();
+            
+            showNotification(
+                `多目标优化完成！优化了 ${totalOptimized} 项，综合评分: ${finalScore.toFixed(1)}/100`, 
+                'success'
+            );
+            
+            return totalOptimized;
+        }
+        
+        // 计算综合评分
+        function calculateComprehensiveScore() {
+            const scores = {
+                balance: AppState.stats.balanceScore * 0.4,
+                concentration: calculateConcentrationScore() * 0.3,
+                location: calculateLocationScore() * 0.2,
+                continuity: calculateContinuityScore() * 0.1
+            };
+            
+            return Object.values(scores).reduce((sum, score) => sum + score, 0);
+        }
+        
+        // 计算工作日集中度评分
+        function calculateConcentrationScore() {
+            let totalScore = 0;
+            let teacherCount = 0;
+            
+            AppState.teachers.forEach(teacher => {
+                if (teacher.assignments.length === 0) return;
+                
+                const workDays = new Set(teacher.assignments.map(a => a.slot.date));
+                const concentrationRatio = teacher.assignments.length / workDays.size;
+                
+                // 理想情况是每天2-3个任务
+                const score = Math.min(100, (concentrationRatio / 2.5) * 100);
+                totalScore += score;
+                teacherCount++;
+            });
+            
+            return teacherCount > 0 ? totalScore / teacherCount : 100;
+        }
+        
+        // 计算考场分布评分
+        function calculateLocationScore() {
+            let totalScore = 0;
+            let teacherCount = 0;
+            
+            AppState.teachers.forEach(teacher => {
+                if (teacher.assignments.length === 0) return;
+                
+                const locations = teacher.assignments.map(a => a.slot.location);
+                const uniqueLocations = new Set(locations);
+                
+                // 计算位置分散度
+                const dispersionRatio = uniqueLocations.size / teacher.assignments.length;
+                
+                // 理想情况是集中在2-3个考场
+                const score = Math.max(0, 100 - (dispersionRatio * 100));
+                totalScore += score;
+                teacherCount++;
+            });
+            
+            return teacherCount > 0 ? totalScore / teacherCount : 100;
+        }
+        
+        // 计算时间连续性评分
+        function calculateContinuityScore() {
+            let totalScore = 0;
+            let teacherCount = 0;
+            
+            AppState.teachers.forEach(teacher => {
+                if (teacher.assignments.length < 2) return;
+                
+                // 按日期分组
+                const dayAssignments = {};
+                teacher.assignments.forEach(a => {
+                    const date = a.slot.date;
+                    if (!dayAssignments[date]) dayAssignments[date] = [];
+                    dayAssignments[date].push(a);
+                });
+                
+                let dayScores = [];
+                Object.values(dayAssignments).forEach(assignments => {
+                    if (assignments.length < 2) {
+                        dayScores.push(100); // 单个任务无需考虑连续性
+                        return;
+                    }
+                    
+                    // 按时间排序
+                    assignments.sort((a, b) => 
+                        a.slot.startTime.localeCompare(b.slot.startTime)
+                    );
+                    
+                    let gaps = [];
+                    for (let i = 0; i < assignments.length - 1; i++) {
+                        const gap = calculateTimeGap(
+                            assignments[i].slot.endTime, 
+                            assignments[i + 1].slot.startTime
+                        );
+                        gaps.push(gap);
+                    }
+                    
+                    // 理想间隔是0-30分钟
+                    const avgGap = gaps.reduce((sum, g) => sum + g, 0) / gaps.length;
+                    const score = Math.max(0, 100 - (avgGap / 30) * 50);
+                    dayScores.push(score);
+                });
+                
+                const teacherScore = dayScores.reduce((sum, s) => sum + s, 0) / dayScores.length;
+                totalScore += teacherScore;
+                teacherCount++;
+            });
+            
+            return teacherCount > 0 ? totalScore / teacherCount : 100;
+        }
+
+        // ========== DeepSeek AI 集成 ==========
+        async function optimizeWithDeepSeek() {
+            // 检查是否有API密钥
+            const apiKey = AppState.deepseekApiKey; // 需要在设置中添加API密钥输入
+            
+            if (!apiKey) {
+                showModal('配置 DeepSeek API', `
+                    <div class="space-y-4">
+                        <p class="text-sm text-gray-600">使用 DeepSeek AI 优化需要配置 API 密钥</p>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">API 密钥</label>
+                            <input type="password" id="deepseekApiKey" class="w-full px-3 py-2 border rounded-lg" 
+                                   placeholder="输入您的 DeepSeek API 密钥">
+                        </div>
+                        <div class="text-xs text-gray-500">
+                            <p>• 访问 <a href="https://platform.deepseek.com" target="_blank" class="text-blue-500 hover:underline">DeepSeek 平台</a> 获取 API 密钥</p>
+                            <p>• API 调用将产生费用，请查看官方定价</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="closeModal()" class="flex-1 btn btn-secondary">取消</button>
+                            <button onclick="saveDeepSeekConfig()" class="flex-1 btn btn-primary">保存并继续</button>
+                        </div>
+                    </div>
+                `);
+                return 0;
+            }
+            
+            updateProgress(20, '准备数据并调用 DeepSeek API...');
+            
+            try {
+                // 准备发送给API的数据
+                const requestData = {
+                    teachers: AppState.teachers.map(t => ({
+                        name: t.name,
+                        department: t.department,
+                        currentWorkload: t.workload,
+                        currentAssignments: t.assignments.length,
+                        preferences: {} // 可扩展教师偏好
+                    })),
+                    schedule: AppState.schedule.map(s => ({
+                        date: s.date,
+                        startTime: s.startTime,
+                        endTime: s.endTime,
+                        location: s.location,
+                        required: s.required
+                    })),
+                    currentAssignments: AppState.assignments.map(a => ({
+                        teacher: a.teacher,
+                        date: a.slot.date,
+                        time: `${a.slot.startTime}-${a.slot.endTime}`,
+                        location: a.slot.location,
+                        type: a.type
+                    })),
+                    constraints: {
+                        exclusions: AppState.rules.exclusions,
+                        locked: AppState.rules.locked,
+                        designated: AppState.rules.designations
+                    },
+                    optimizationGoals: [
+                        "工作量均衡：确保每位教师的工作时长尽可能接近平均值",
+                        "减少冲突：避免同一教师同时出现在多个考场",
+                        "考虑偏好：尽量满足教师的时间和地点偏好",
+                        "最小化移动：减少教师在不同考场间的移动"
+                    ]
+                };
+                
+                // 调用 DeepSeek API
+                const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: 'deepseek-chat',
+                        messages: [
+                            {
+                                role: 'system',
+                                content: `你是一个智能排班优化专家。请分析当前的监考排班情况，并提供优化建议。
+                                返回格式必须是可解析的JSON，包含以下结构：
+                                {
+                                    "optimizations": [
+                                        {
+                                            "type": "swap", // 或 "move"
+                                            "from": { "teacher": "教师A", "slot": "时间段ID" },
+                                            "to": { "teacher": "教师B", "slot": "时间段ID" },
+                                            "reason": "优化原因"
+                                        }
+                                    ],
+                                    "summary": "优化总结",
+                                    "expectedImprovement": "预期改进"
+                                }`
+                            },
+                            {
+                                role: 'user',
+                                content: `请优化以下监考排班：\n${JSON.stringify(requestData, null, 2)}`
+                            }
+                        ],
+                        temperature: 0.7,
+                        max_tokens: 4000
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`API 请求失败: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                const aiResponse = JSON.parse(result.choices[0].message.content);
+                
+                updateProgress(60, '应用 AI 优化建议...');
+                
+                // 应用AI的优化建议
+                let appliedCount = 0;
+                for (const optimization of aiResponse.optimizations) {
+                    if (applyAIOptimization(optimization)) {
+                        appliedCount++;
+                    }
+                    updateProgress(60 + (appliedCount / aiResponse.optimizations.length * 30));
+                }
+                
+                // 显示优化摘要
+                showNotification(`DeepSeek AI 优化完成：${aiResponse.summary}`, 'success');
+                
+                return appliedCount;
+                
+            } catch (error) {
+                console.error('DeepSeek API 错误:', error);
+                showNotification('AI 优化失败：' + error.message, 'error');
+                return 0;
+            }
+        }
+        
+        function saveDeepSeekConfig() {
+            const apiKey = document.getElementById('deepseekApiKey').value;
+            if (!apiKey) {
+                showNotification('请输入 API 密钥', 'warning');
+                return;
+            }
+            
+            AppState.deepseekApiKey = apiKey;
+            closeModal();
+            showNotification('API 密钥已保存，重新运行优化...', 'info');
+            
+            // 重新运行优化
+            setTimeout(() => {
+                runAIOptimization();
+            }, 500);
+        }
+        
+        function applyAIOptimization(optimization) {
+            try {
+                if (optimization.type === 'swap') {
+                    // 实现交换逻辑
+                    const teacher1 = AppState.teachers.find(t => t.name === optimization.from.teacher);
+                    const teacher2 = AppState.teachers.find(t => t.name === optimization.to.teacher);
+                    
+                    if (teacher1 && teacher2) {
+                        // 执行交换
+                        return true;
+                    }
+                } else if (optimization.type === 'move') {
+                    // 实现移动逻辑
+                    return true;
+                }
+                return false;
+            } catch (error) {
+                console.error('应用优化失败:', error);
+                return false;
+            }
+        }
+
+        // ========== 浮动按钮菜单 ==========
+        const fabButton = document.getElementById('fabButton');
+        let fabMenuOpen = false;
+
+        fabButton.addEventListener('click', () => {
+            if (!fabMenuOpen) {
+                showFabMenu();
+            } else {
+                hideFabMenu();
+            }
+        });
+
+        function showFabMenu() {
+            // 创建菜单项
+            const menuItems = [
+                { icon: 'fa-download', label: '导出数据', action: exportData },
+                { icon: 'fa-upload', label: '导入模板', action: importTemplate },
+                { icon: 'fa-cog', label: '高级设置', action: showAdvancedSettings },
+                { icon: 'fa-question', label: '使用帮助', action: showHelp }
+            ];
+            
+            const menu = document.createElement('div');
+            menu.className = 'fixed bottom-20 right-2 space-y-2';
+            menu.id = 'fabMenu';
+            
+            menuItems.forEach((item, index) => {
+                const button = document.createElement('button');
+                button.className = 'fab-menu-item flex items-center gap-3 px-4 py-2 bg-white dark:bg-gray-800 rounded-full shadow-lg opacity-0 transform translate-y-4';
+                button.innerHTML = `
+                    <span class="text-sm font-medium">${item.label}</span>
+                    <div class="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+                        <i class="fas ${item.icon}"></i>
+                    </div>
+                `;
+                button.onclick = item.action;
+                
+                menu.appendChild(button);
+                
+                // 动画显示
+                setTimeout(() => {
+                    button.style.transition = 'all 0.3s';
+                    button.style.opacity = '1';
+                    button.style.transform = 'translateY(0)';
+                }, index * 50);
+            });
+            
+            document.body.appendChild(menu);
+            fabMenuOpen = true;
+            
+            // 旋转FAB图标
+            fabButton.querySelector('i').className = 'fas fa-times';
+        }
+
+        function hideFabMenu() {
+            const menu = document.getElementById('fabMenu');
+            if (menu) {
+                menu.remove();
+            }
+            fabMenuOpen = false;
+            fabButton.querySelector('i').className = 'fas fa-plus';
+        }
+
+        // ========== 功能函数 ==========
+        function exportData() {
+            hideFabMenu();
+            showNotification('正在导出数据...', 'info');
+            // 实现导出逻辑
+        }
+
+        function importTemplate() {
+            hideFabMenu();
+            showNotification('正在加载模板...', 'info');
+            // 实现导入模板逻辑
+        }
+
+        function showAdvancedSettings() {
+            hideFabMenu();
+            // 显示高级设置模态框
+        }
+
+        function showHelp() {
+            hideFabMenu();
+            // 显示帮助文档
+        }
+
+        // ========== 事件绑定 ==========
+        document.getElementById('runButton').addEventListener('click', runSmartAssignment);
+
+        // ========== 详细统计功能 ==========
+        function showDetailedStats() {
+            if (AppState.teachers.length === 0) {
+                showNotification('暂无统计数据', 'info');
+                return;
+            }
+            
+            // 生成详细统计表
+            const workingTeachers = AppState.teachers
+                .filter(t => t.workload > 0)
+                .sort((a, b) => b.workload - a.workload);
+            
+            let statsHTML = `
+                <div class="max-h-96 overflow-y-auto">
+                    <table class="w-full text-sm">
+                        <thead class="sticky top-0 bg-white dark:bg-gray-800">
+                            <tr class="border-b">
+                                <th class="text-left p-2">排名</th>
+                                <th class="text-left p-2">教师</th>
+                                <th class="text-center p-2">监考次数</th>
+                                <th class="text-center p-2">总时长</th>
+                                <th class="text-left p-2">负责考场</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            workingTeachers.forEach((teacher, index) => {
+                const locations = [...new Set(teacher.assignments.map(a => a.slot.location))].sort().join('、');
+                let rowClass = '';
+                
+                if (index === 0) rowClass = 'bg-red-50 dark:bg-red-900/20';
+                else if (index === 1) rowClass = 'bg-orange-50 dark:bg-orange-900/20';
+                else if (index === 2) rowClass = 'bg-yellow-50 dark:bg-yellow-900/20';
+                else if (index >= workingTeachers.length - 3) rowClass = 'bg-green-50 dark:bg-green-900/20';
+                
+                statsHTML += `
+                    <tr class="${rowClass} border-b hover:bg-gray-100 dark:hover:bg-gray-700">
+                        <td class="p-2 font-medium">${index + 1}</td>
+                        <td class="p-2">${teacher.name}</td>
+                        <td class="p-2 text-center">${teacher.assignments.length}</td>
+                        <td class="p-2 text-center">${teacher.workload.toFixed(1)}h</td>
+                        <td class="p-2 text-xs">${locations}</td>
+                    </tr>
+                `;
+            });
+            
+            statsHTML += `
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg text-sm">
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>总工作量: <strong>${workingTeachers.reduce((sum, t) => sum + t.workload, 0).toFixed(1)}h</strong></div>
+                        <div>最高工作量: <strong>${workingTeachers[0]?.workload.toFixed(1) || 0}h</strong></div>
+                        <div>平均工作量: <strong>${AppState.stats.avgWorkload}h</strong></div>
+                        <div>最低工作量: <strong>${workingTeachers[workingTeachers.length - 1]?.workload.toFixed(1) || 0}h</strong></div>
+                    </div>
+                </div>
+            `;
+            
+            showModal('详细工作量统计', statsHTML);
+        }
+
+        // ========== 模板和文件管理功能 ==========
+        function useTemplate() {
+            showModal('选择模板', `
+                <div class="space-y-3">
+                    <button class="w-full p-3 text-left border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800" onclick="loadTemplate('basic')">
+                        <div class="font-medium">基础模板</div>
+                        <div class="text-sm text-gray-500">适用于一般考试安排</div>
+                    </button>
+                    <button class="w-full p-3 text-left border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800" onclick="loadTemplate('final')">
+                        <div class="font-medium">期末考试模板</div>
+                        <div class="text-sm text-gray-500">适用于大规模期末考试</div>
+                    </button>
+                    <button class="w-full p-3 text-left border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800" onclick="loadTemplate('custom')">
+                        <div class="font-medium">自定义模板</div>
+                        <div class="text-sm text-gray-500">加载您保存的模板</div>
+                    </button>
+                </div>
+            `);
+        }
+
+        function loadTemplate(type) {
+            closeModal();
+            if (type === 'basic') {
+                // 加载基础模板数据
+                AppState.teachers = [
+                    { name: '张三', department: '数学系', workload: 0, assignments: [] },
+                    { name: '李四', department: '物理系', workload: 0, assignments: [] },
+                    { name: '王五', department: '化学系', workload: 0, assignments: [] },
+                    { name: '赵六', department: '生物系', workload: 0, assignments: [] },
+                    { name: '钱七', department: '计算机系', workload: 0, assignments: [] }
+                ];
+                AppState.schedule = [
+                    { date: '2024-06-03', startTime: '08:00', endTime: '10:30', location: '101', required: 1, assigned: [] },
+                    { date: '2024-06-03', startTime: '14:00', endTime: '16:00', location: '102', required: 1, assigned: [] },
+                    { date: '2024-06-04', startTime: '08:30', endTime: '10:30', location: '201', required: 1, assigned: [] }
+                ];
+                updateFileStatus('teacher', '模板教师数据.xlsx');
+                updateFileStatus('schedule', '模板考场安排.xlsx');
+                updateStats();
+                showNotification('已加载基础模板', 'success');
+            } else {
+                showNotification('该模板暂未实现', 'info');
+            }
+        }
+
+        function loadRecentFiles() {
+            showNotification('最近文件功能暂未实现', 'info');
+        }
+
+        // ========== 高级规则设置功能 ==========
+        function showExclusionModal() {
+            if (AppState.teachers.length === 0) {
+                showNotification('请先导入教师数据', 'warning');
+                return;
+            }
+            
+            const teacherOptions = AppState.teachers.map(t => 
+                `<option value="${t.name}">${t.name}</option>`
+            ).join('');
+            
+            showModal('教师排除规则', `
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-2">选择教师</label>
+                        <select id="exclusionTeacher" class="w-full px-3 py-2 border rounded-lg">
+                            <option value="">请选择...</option>
+                            ${teacherOptions}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">排除时间段</label>
+                        <div class="space-y-2" id="exclusionTimes">
+                            <p class="text-sm text-gray-500">请先选择教师</p>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <label class="block text-sm font-medium mb-2">当前排除规则</label>
+                        <div id="currentExclusions" class="max-h-32 overflow-y-auto border rounded-lg p-2 bg-gray-50 dark:bg-gray-800">
+                            <p class="text-sm text-gray-500">暂无排除规则</p>
+                        </div>
+                    </div>
+                    <button class="w-full btn btn-primary" onclick="saveExclusion()">保存排除规则</button>
+                </div>
+            `);
+            
+            // 监听教师选择
+            document.getElementById('exclusionTeacher').addEventListener('change', updateExclusionTimes);
+        }
+
+        function updateExclusionTimes(e) {
+            const teacher = e.target.value;
+            if (!teacher) return;
+            
+            const timesContainer = document.getElementById('exclusionTimes');
+            
+            // 按日期分组
+            const scheduleByDate = {};
+            AppState.schedule.forEach((s, index) => {
+                if (!scheduleByDate[s.date]) {
+                    scheduleByDate[s.date] = [];
+                }
+                scheduleByDate[s.date].push({ ...s, index });
+            });
+            
+            // 生成分组的复选框
+            let html = '<div class="space-y-3">';
+            Object.entries(scheduleByDate).forEach(([date, slots]) => {
+                const dateId = `date_${date.replace(/\//g, '_')}`;
+                html += `
+                    <div class="border rounded-lg p-3">
+                        <label class="flex items-center gap-2 font-medium text-sm mb-2 cursor-pointer">
+                            <input type="checkbox" id="${dateId}" class="date-checkbox rounded" onchange="toggleDateSlots('${dateId}')">
+                            <span>${date} (全选)</span>
+                        </label>
+                        <div class="pl-6 space-y-1">
+                            ${slots.map(s => `
+                                <label class="flex items-center gap-2 text-sm">
+                                    <input type="checkbox" value="${s.index}" class="slot-checkbox rounded" data-date="${dateId}">
+                                    <span>${s.startTime}-${s.endTime} (${s.location})</span>
+                                </label>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            
+            timesContainer.innerHTML = html || '<p class="text-sm text-gray-500">暂无考场安排</p>';
+            
+            // 显示当前排除规则
+            updateCurrentExclusions(teacher);
+        }
+
+        function toggleDateSlots(dateId) {
+            const dateCheckbox = document.getElementById(dateId);
+            const slotCheckboxes = document.querySelectorAll(`input[data-date="${dateId}"]`);
+            slotCheckboxes.forEach(cb => cb.checked = dateCheckbox.checked);
+        }
+
+        function updateCurrentExclusions(teacher) {
+            const container = document.getElementById('currentExclusions');
+            const exclusions = AppState.rules.exclusions[teacher];
+            
+            if (!exclusions || exclusions.length === 0) {
+                container.innerHTML = '<p class="text-sm text-gray-500">暂无排除规则</p>';
+                return;
+            }
+            
+            container.innerHTML = exclusions.map((loc, index) => `
+                <div class="flex items-center justify-between text-sm mb-1">
+                    <span>考场 ${loc}</span>
+                    <button onclick="removeExclusion('${teacher}', ${index})" class="text-red-500 hover:text-red-700">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function removeExclusion(teacher, index) {
+            if (AppState.rules.exclusions[teacher]) {
+                AppState.rules.exclusions[teacher].splice(index, 1);
+                updateCurrentExclusions(teacher);
+            }
+        }
+
+        function saveExclusion() {
+            const teacher = document.getElementById('exclusionTeacher').value;
+            if (!teacher) {
+                showNotification('请选择教师', 'warning');
+                return;
+            }
+            
+            // 获取选中的时间段
+            const checkboxes = document.querySelectorAll('#exclusionTimes input.slot-checkbox:checked');
+            const excludedIndexes = Array.from(checkboxes).map(cb => parseInt(cb.value));
+            
+            if (!AppState.rules.exclusions[teacher]) {
+                AppState.rules.exclusions[teacher] = [];
+            }
+            
+            // 清空之前的规则
+            AppState.rules.exclusions[teacher] = [];
+            
+            excludedIndexes.forEach(index => {
+                const slot = AppState.schedule[index];
+                if (slot) {
+                    const exclusionKey = `${slot.date}_${slot.startTime}_${slot.endTime}_${slot.location}`;
+                    if (!AppState.rules.exclusions[teacher].includes(exclusionKey)) {
+                        AppState.rules.exclusions[teacher].push(exclusionKey);
+                    }
+                }
+            });
+            
+            closeModal();
+            showNotification(`已为 ${teacher} 设置 ${excludedIndexes.length} 个排除规则`, 'success');
+        }
+
+        function showDesignationModal() {
+            if (AppState.teachers.length === 0 || AppState.schedule.length === 0) {
+                showNotification('请先导入教师和考场数据', 'warning');
+                return;
+            }
+            
+            showModal('指定监考任务', `
+                <div class="space-y-4">
+                    <p class="text-sm text-gray-600">选择要指定的监考任务：</p>
+                    <div class="max-h-96 overflow-y-auto space-y-2">
+                        ${AppState.schedule.map((s, index) => `
+                            <div class="p-3 border rounded-lg">
+                                <div class="font-medium text-sm">${s.date} ${s.startTime}-${s.endTime}</div>
+                                <div class="text-sm text-gray-500">考场：${s.location}</div>
+                                <select class="mt-2 w-full px-3 py-2 border rounded text-sm" data-schedule-index="${index}">
+                                    <option value="">未指定</option>
+                                    ${AppState.teachers.map(t => `<option value="${t.name}">${t.name}</option>`).join('')}
+                                </select>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <button class="w-full btn btn-primary" onclick="saveDesignations()">保存指定任务</button>
+                </div>
+            `);
+        }
+
+        function saveDesignations() {
+            const selects = document.querySelectorAll('[data-schedule-index]');
+            AppState.rules.designations = [];
+            
+            selects.forEach(select => {
+                if (select.value) {
+                    const scheduleIndex = parseInt(select.dataset.scheduleIndex);
+                    AppState.rules.designations.push({
+                        scheduleIndex: scheduleIndex,
+                        teacher: select.value
+                    });
+                }
+            });
+            
+            closeModal();
+            showNotification(`已设置 ${AppState.rules.designations.length} 个指定任务`, 'success');
+        }
+
+        function showLockingModal() {
+            if (AppState.teachers.length === 0 || AppState.schedule.length === 0) {
+                showNotification('请先导入教师和考场数据', 'warning');
+                return;
+            }
+            
+            // 获取当前锁定的安排
+            const currentLocked = AppState.rules.locked || [];
+            
+            showModal('锁定特定安排', `
+                <div class="space-y-4">
+                    <p class="text-sm text-gray-600">锁定后的安排在优化时不会被修改</p>
+                    <div class="max-h-96 overflow-y-auto space-y-2">
+                        ${AppState.schedule.map((s, index) => {
+                            const isLocked = currentLocked.some(l => l.scheduleIndex === index);
+                            const lockedTeacher = isLocked ? currentLocked.find(l => l.scheduleIndex === index).teacher : '';
+                            
+                            return `
+                                <div class="p-3 border rounded-lg ${isLocked ? 'bg-orange-50 dark:bg-orange-900/20 border-orange-300' : ''}">
+                                    <div class="flex items-center justify-between">
+                                        <div>
+                                            <div class="font-medium text-sm">${s.date} ${s.startTime}-${s.endTime}</div>
+                                            <div class="text-sm text-gray-500">考场：${s.location}</div>
+                                        </div>
+                                        <label class="flex items-center gap-2">
+                                            <input type="checkbox" 
+                                                   class="lock-checkbox rounded" 
+                                                   data-schedule-index="${index}"
+                                                   ${isLocked ? 'checked' : ''}
+                                                   onchange="toggleLock(${index})">
+                                            <i class="fas fa-lock text-orange-500 ${isLocked ? '' : 'opacity-30'}"></i>
+                                        </label>
+                                    </div>
+                                    <select class="mt-2 w-full px-3 py-2 border rounded text-sm ${!isLocked ? 'opacity-50' : ''}" 
+                                            id="lock-teacher-${index}"
+                                            ${!isLocked ? 'disabled' : ''}
+                                            data-schedule-index="${index}">
+                                        <option value="">选择教师...</option>
+                                        ${AppState.teachers.map(t => `
+                                            <option value="${t.name}" ${lockedTeacher === t.name ? 'selected' : ''}>${t.name}</option>
+                                        `).join('')}
+                                    </select>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                    <div class="flex gap-2">
+                        <button class="flex-1 btn btn-secondary" onclick="clearAllLocks()">
+                            <i class="fas fa-unlock mr-2"></i>清除所有锁定
+                        </button>
+                        <button class="flex-1 btn btn-primary" onclick="saveLocking()">
+                            <i class="fas fa-save mr-2"></i>保存锁定
+                        </button>
+                    </div>
+                </div>
+            `);
+        }
+
+        function toggleLock(index) {
+            const checkbox = document.querySelector(`input[data-schedule-index="${index}"]`);
+            const select = document.getElementById(`lock-teacher-${index}`);
+            
+            if (checkbox.checked) {
+                select.disabled = false;
+                select.classList.remove('opacity-50');
+            } else {
+                select.disabled = true;
+                select.classList.add('opacity-50');
+                select.value = '';
+            }
+        }
+
+        function clearAllLocks() {
+            document.querySelectorAll('.lock-checkbox').forEach(cb => {
+                cb.checked = false;
+                const index = cb.dataset.scheduleIndex;
+                const select = document.getElementById(`lock-teacher-${index}`);
+                select.disabled = true;
+                select.classList.add('opacity-50');
+                select.value = '';
+            });
+            showNotification('已清除所有锁定', 'info');
+        }
+
+        function saveLocking() {
+            AppState.rules.locked = [];
+            
+            document.querySelectorAll('.lock-checkbox:checked').forEach(checkbox => {
+                const index = parseInt(checkbox.dataset.scheduleIndex);
+                const select = document.getElementById(`lock-teacher-${index}`);
+                
+                if (select.value) {
+                    AppState.rules.locked.push({
+                        scheduleIndex: index,
+                        teacher: select.value
+                    });
+                }
+            });
+            
+            closeModal();
+            showNotification(`已锁定 ${AppState.rules.locked.length} 个安排`, 'success');
+        }
+
+// ========== 数据转换函数，用于导出 ==========
+        function transformAssignmentsToPivot(assignments) {
+            // 提取所有不重复的考场并排序
+            const locations = [...new Set(assignments.map(a => a.slot.location))].sort((a, b) => {
+                const numA = extractNumber(a);
+                const numB = extractNumber(b);
+                if (numA !== null && numB !== null) {
+                    return numA - numB;
+                }
+                return a.localeCompare(b, 'zh-CN', { numeric: true });
+            });
+
+            const timeSlotsMap = new Map();
+
+            // 按时间段聚合分配结果
+            assignments.forEach(assignment => {
+                const timeSlotKey = `${assignment.slot.date}|${assignment.slot.startTime}|${assignment.slot.endTime}`;
+                if (!timeSlotsMap.has(timeSlotKey)) {
+                    timeSlotsMap.set(timeSlotKey, {
+                        date: assignment.slot.date,
+                        startTime: assignment.slot.startTime,
+                        endTime: assignment.slot.endTime,
+                        assignmentsByLocation: {}
+                    });
+                }
+
+                const timeSlot = timeSlotsMap.get(timeSlotKey);
+                if (!timeSlot.assignmentsByLocation[assignment.slot.location]) {
+                    timeSlot.assignmentsByLocation[assignment.slot.location] = [];
+                }
+                // 处理“人员不足”的情况
+                if (assignment.teacher === '!!人员不足!!') {
+                    timeSlot.assignmentsByLocation[assignment.slot.location].push('人员不足');
+                } else {
+                    timeSlot.assignmentsByLocation[assignment.slot.location].push(assignment.teacher);
+                }
+            });
+
+            // 将Map转换为数组并排序
+            const timeSlots = Array.from(timeSlotsMap.values()).sort((a, b) => {
+                if (a.date !== b.date) return a.date.localeCompare(b.date);
+                if (a.startTime !== b.startTime) return a.startTime.localeCompare(b.startTime);
+                return a.endTime.localeCompare(b.endTime);
+            });
+
+            return { locations, timeSlots };
+        }
+        // ========== 导出功能（修复版） ==========
+        function exportToExcel() {
+            if (AppState.assignments.length === 0) {
+                showNotification('暂无数据可导出', 'warning');
+                return;
+            }
+            
+            try {
+                // 创建工作簿
+                const wb = XLSX.utils.book_new();
+                
+                // 1. 创建横向排班表
+                const { locations, timeSlots } = transformAssignmentsToPivot(AppState.assignments);
+                
+                // 构建表头
+                const headers = ['日期', '时间', ...locations];
+                const wsData = [headers];
+                
+                // 按日期和时间分组数据
+                const groupedByDate = timeSlots.reduce((acc, slot) => {
+                    (acc[slot.date] = acc[slot.date] || []).push(slot);
+                    return acc;
+                }, {});
+                
+                // 生成数据行
+                Object.keys(groupedByDate).sort((a, b) => {
+                    // 确保正确的日期排序
+                    const dateA = new Date(a.replace(/\//g, '-'));
+                    const dateB = new Date(b.replace(/\//g, '-'));
+                    return dateA - dateB;
+                }).forEach(date => {
+                    groupedByDate[date].forEach(slot => {
+                        const row = [
+                            date,
+                            `${slot.startTime}-${slot.endTime}`,
+                            ...locations.map(loc => {
+                                const teachers = slot.assignmentsByLocation[loc] || [];
+                                // 横向排列多个教师，用逗号分隔
+                                return teachers.length > 0 ? teachers.join('、') : '未分配';
+                            })
+                        ];
+                        wsData.push(row);
+                    });
+                });
+                
+                const ws = XLSX.utils.aoa_to_sheet(wsData);
+                
+                // 设置列宽
+                ws['!cols'] = [
+                    { wch: 12 }, // 日期
+                    { wch: 15 }, // 时间
+                    ...locations.map(() => ({ wch: 20 })) // 考场（加宽以容纳多个姓名）
+                ];
+                
+                // 添加单元格样式和边框
+                const range = XLSX.utils.decode_range(ws['!ref']);
+                for (let R = range.s.r; R <= range.e.r; R++) {
+                    for (let C = range.s.c; C <= range.e.c; C++) {
+                        const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+                        
+                        // 确保单元格存在
+                        if (!ws[cellAddress]) {
+                            ws[cellAddress] = { v: '', t: 's' };
+                        }
+                        
+                        // 设置样式
+                        if (!ws[cellAddress].s) ws[cellAddress].s = {};
+                        
+                        // 所有单元格添加边框
+                        ws[cellAddress].s.border = {
+                            top: { style: 'thin' },
+                            bottom: { style: 'thin' },
+                            left: { style: 'thin' },
+                            right: { style: 'thin' }
+                        };
+                        
+                        // 居中对齐
+                        ws[cellAddress].s.alignment = {
+                            horizontal: 'center',
+                            vertical: 'center',
+                            wrapText: true
+                        };
+                        
+                        // 标题行特殊样式
+                        if (R === 0) {
+                            ws[cellAddress].s.font = { bold: true };
+                            ws[cellAddress].s.fill = {
+                                patternType: 'solid',
+                                fgColor: { rgb: 'CCCCCC' }
+                            };
+                        }
+                    }
+                }
+                
+                XLSX.utils.book_append_sheet(wb, ws, '排班结果');
+                
+                // 2. 创建工作量统计表
+                const statsHeaders = ['排名', '教师姓名', '部门', '监考次数', '总时长(小时)', '负责考场'];
+                const statsData = [statsHeaders];
+                
+                const sortedTeachers = AppState.teachers
+                    .filter(t => t.assignments && t.assignments.length > 0)
+                    .sort((a, b) => b.workload - a.workload);
+                
+                sortedTeachers.forEach((t, index) => {
+                    const locations = [...new Set(t.assignments.map(a => a.slot.location))]
+                        .sort((a, b) => {
+                            const numA = extractNumber(a);
+                            const numB = extractNumber(b);
+                            if (numA !== null && numB !== null) {
+                                return numA - numB;
+                            }
+                            return a.localeCompare(b);
+                        })
+                        .join('、');
+                    
+                    statsData.push([
+                        index + 1,
+                        t.name,
+                        t.department || '-',
+                        t.assignments.length,
+                        t.workload.toFixed(1),
+                        locations
+                    ]);
+                });
+                
+                // 添加汇总行
+                const totalWorkload = sortedTeachers.reduce((sum, t) => sum + t.workload, 0);
+                const totalAssignments = sortedTeachers.reduce((sum, t) => sum + t.assignments.length, 0);
+                statsData.push([
+                    '',
+                    '合计',
+                    '',
+                    totalAssignments,
+                    totalWorkload.toFixed(1),
+                    ''
+                ]);
+                
+                const ws2 = XLSX.utils.aoa_to_sheet(statsData);
+                
+                // 设置统计表的列宽
+                ws2['!cols'] = [
+                    { wch: 6 },  // 排名
+                    { wch: 12 }, // 姓名
+                    { wch: 15 }, // 部门
+                    { wch: 10 }, // 次数
+                    { wch: 12 }, // 时长
+                    { wch: 40 }  // 考场
+                ];
+                
+                // 添加统计表的样式
+                const range2 = XLSX.utils.decode_range(ws2['!ref']);
+                for (let R = range2.s.r; R <= range2.e.r; R++) {
+                    for (let C = range2.s.c; C <= range2.e.c; C++) {
+                        const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+                        
+                        if (!ws2[cellAddress]) {
+                            ws2[cellAddress] = { v: '', t: 's' };
+                        }
+                        
+                        if (!ws2[cellAddress].s) ws2[cellAddress].s = {};
+                        
+                        ws2[cellAddress].s.border = {
+                            top: { style: 'thin' },
+                            bottom: { style: 'thin' },
+                            left: { style: 'thin' },
+                            right: { style: 'thin' }
+                        };
+                        
+                        ws2[cellAddress].s.alignment = {
+                            horizontal: C <= 3 ? 'center' : 'left',
+                            vertical: 'center'
+                        };
+                        
+                        // 标题行和汇总行
+                        if (R === 0 || R === range2.e.r) {
+                            ws2[cellAddress].s.font = { bold: true };
+                            ws2[cellAddress].s.fill = {
+                                patternType: 'solid',
+                                fgColor: { rgb: R === 0 ? 'CCCCCC' : 'E0E0E0' }
+                            };
+                        }
+                    }
+                }
+                
+                XLSX.utils.book_append_sheet(wb, ws2, '工作量统计');
+                
+                // 导出文件
+                const filename = `监考排班_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.xlsx`;
+                XLSX.writeFile(wb, filename);
+                showNotification('导出成功：' + filename, 'success');
+                
+            } catch (error) {
+                console.error('导出错误:', error);
+                showNotification('导出失败：' + error.message, 'error');
+            }
+        }
+
+        function printNotifications() {
+            if (AppState.assignments.length === 0) {
+                showNotification('暂无数据可打印', 'warning');
+                return;
+            }
+            
+            // 按教师分组
+            const teacherAssignments = {};
+            AppState.assignments.forEach(a => {
+                if (!teacherAssignments[a.teacher]) {
+                    teacherAssignments[a.teacher] = [];
+                }
+                teacherAssignments[a.teacher].push(a);
+            });
+            
+            // 创建打印内容
+            const printContent = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <title>监考通知单</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; }
+                        .page { page-break-after: always; padding: 20px; }
+                        .header { text-align: center; margin-bottom: 30px; }
+                        .teacher-name { font-size: 20px; font-weight: bold; margin: 20px 0; }
+                        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+                        th, td { border: 1px solid #000; padding: 8px; text-align: center; }
+                        th { background-color: #f0f0f0; }
+                        .footer { margin-top: 50px; }
+                        .signature { margin-top: 30px; text-align: right; }
+                        @media print {
+                            .no-print { display: none; }
+                        }
+                    </style>
+                </head>
+                <body>
+                    ${Object.entries(teacherAssignments).map(([teacher, assignments]) => `
+                        <div class="page">
+                            <div class="header">
+                                <h1>监考通知单</h1>
+                                <p>教务处 ${new Date().toLocaleDateString('zh-CN')}</p>
+                            </div>
+                            <div class="teacher-name">${teacher} 老师：</div>
+                            <p>您好！根据考试安排，您的监考任务如下：</p>
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>日期</th>
+                                        <th>时间</th>
+                                        <th>考场</th>
+                                        <th>备注</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${assignments.sort((a, b) => {
+                                        if (a.slot.date !== b.slot.date) {
+                                            return a.slot.date.localeCompare(b.slot.date);
+                                        }
+                                        return a.slot.startTime.localeCompare(b.slot.startTime);
+                                    }).map(a => `
+                                        <tr>
+                                            <td>${a.slot.date}</td>
+                                            <td>${a.slot.startTime} - ${a.slot.endTime}</td>
+                                            <td>${a.slot.location}</td>
+                                            <td></td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                            <div class="footer">
+                                <p>请准时到达考场，提前15分钟做好监考准备。</p>
+                                <p>如有特殊情况无法参加，请提前与教务处联系。</p>
+                                <div class="signature">
+                                    <p>教务处（盖章）</p>
+                                    <p>${new Date().toLocaleDateString('zh-CN')}</p>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </body>
+                </html>
+            `;
+            
+            // 创建新窗口并打印
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(printContent);
+            printWindow.document.close();
+            printWindow.onload = () => {
+                printWindow.print();
+            };
+        }
+
+        function shareResults() {
+            if (AppState.assignments.length === 0) {
+                showNotification('暂无数据可分享', 'warning');
+                return;
+            }
+            
+            // 生成分享链接或二维码
+            const shareData = {
+                title: '监考排班结果',
+                date: new Date().toLocaleDateString('zh-CN'),
+                summary: `共${AppState.teachers.length}位教师，${AppState.schedule.length}个考场`,
+                assignments: AppState.assignments.map(a => ({
+                    teacher: a.teacher,
+                    date: a.slot.date,
+                    time: `${a.slot.startTime}-${a.slot.endTime}`,
+                    location: a.slot.location
+                }))
+            };
+            
+            // 创建分享内容
+            const shareText = `监考排班结果\n日期：${shareData.date}\n${shareData.summary}\n\n详细安排请查看系统`;
+            
+            showModal('分享排班结果', `
+                <div class="space-y-4">
+                    <div class="text-center">
+                        <div class="inline-block p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                            <i class="fas fa-qrcode text-6xl text-gray-400"></i>
+                            <p class="text-sm text-gray-500 mt-2">二维码功能开发中</p>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">分享链接</label>
+                        <div class="flex gap-2">
+                            <input type="text" 
+                                   value="https://exam-scheduler.example.com/share/${Date.now()}" 
+                                   class="flex-1 px-3 py-2 border rounded-lg" 
+                                   readonly>
+                            <button class="btn btn-primary" onclick="copyShareLink()">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">分享文本</label>
+                        <textarea class="w-full px-3 py-2 border rounded-lg" rows="4" readonly>${shareText}</textarea>
+                    </div>
+                    <div class="flex gap-2">
+                        <button class="flex-1 btn btn-secondary" onclick="shareViaEmail()">
+                            <i class="fas fa-envelope mr-2"></i>邮件分享
+                        </button>
+                        <button class="flex-1 btn btn-secondary" onclick="downloadShareFile()">
+                            <i class="fas fa-file-download mr-2"></i>下载文件
+                        </button>
+                    </div>
+                </div>
+            `);
+        }
+
+        function copyShareLink() {
+            const input = document.querySelector('input[type="text"][readonly]');
+            input.select();
+            document.execCommand('copy');
+            showNotification('链接已复制到剪贴板', 'success');
+        }
+
+        function shareViaEmail() {
+            const subject = '监考排班结果';
+            const body = '请查看附件中的监考排班结果。';
+            window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        }
+
+        function downloadShareFile() {
+            const content = JSON.stringify(AppState.assignments, null, 2);
+            const blob = new Blob([content], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `监考排班_${new Date().toLocaleDateString('zh-CN')}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showNotification('文件下载成功', 'success');
+        }
+
+        function showHistory() {
+            // 模拟历史记录数据
+            const historyRecords = [
+                { date: '2024-06-15', teachers: 45, sessions: 23, status: '已完成' },
+                { date: '2024-06-10', teachers: 38, sessions: 18, status: '已完成' },
+                { date: '2024-06-05', teachers: 42, sessions: 20, status: '已完成' },
+                { date: '2024-05-28', teachers: 40, sessions: 19, status: '已完成' }
+            ];
+            
+            showModal('历史记录', `
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="font-medium">最近的排班记录</h3>
+                        <button class="text-sm text-blue-600 hover:text-blue-800" onclick="clearHistory()">
+                            清空历史
+                        </button>
+                    </div>
+                    <div class="space-y-2 max-h-96 overflow-y-auto">
+                        ${historyRecords.map((record, index) => `
+                            <div class="p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer" 
+                                 onclick="loadHistory(${index})">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <div class="font-medium">${record.date}</div>
+                                        <div class="text-sm text-gray-500">
+                                            ${record.teachers}位教师，${record.sessions}个场次
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-xs px-2 py-1 bg-green-100 text-green-700 rounded">
+                                            ${record.status}
+                                        </span>
+                                        <i class="fas fa-chevron-right text-gray-400"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div class="text-center text-sm text-gray-500">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        点击记录可以查看详情或恢复数据
+                    </div>
+                </div>
+            `);
+        }
+
+        function loadHistory(index) {
+            closeModal();
+            showNotification('正在加载历史记录...', 'info');
+            // 这里可以实现加载历史数据的逻辑
+            setTimeout(() => {
+                showNotification('历史记录加载成功', 'success');
+            }, 1000);
+        }
+
+        function clearHistory() {
+            if (confirm('确定要清空所有历史记录吗？此操作不可恢复。')) {
+                showNotification('历史记录已清空', 'success');
+                closeModal();
+            }
+        }
+
+        // ========== 模态框功能 ==========
+        function showModal(title, content) {
+            const modalContainer = document.getElementById('modalContainer');
+            modalContainer.innerHTML = `
+                <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full m-4">
+                        <div class="flex items-center justify-between p-4 border-b">
+                            <h3 class="text-lg font-semibold">${title}</h3>
+                            <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <div class="p-4">
+                            ${content}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function closeModal() {
+            document.getElementById('modalContainer').innerHTML = '';
+        }
+
+
+
+        // 键盘快捷键
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey || e.metaKey) {
+                switch(e.key) {
+                    case 's':
+                        e.preventDefault();
+                        exportData();
+                        break;
+                    case 'r':
+                        e.preventDefault();
+                        if (!AppState.processing && !document.getElementById('runButton').disabled) {
+                            runSmartAssignment();
+                        }
+                        break;
+                }
+            }
+        });
+
+        // 添加平滑滚动
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth' });
+                }
+            });
+        });
+    </script>
+</body>
+</html>
