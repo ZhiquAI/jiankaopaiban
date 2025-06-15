@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智阅AI - 智能历史阅卷助手</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .exam-setup {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        .stats-panel {
+            background: white;
+            border-radius: 16px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            height: fit-content;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-secondary {
+            background: #f3f4f6;
+            color: #374151;
+        }
+
+        .btn-secondary:hover {
+            background: #e5e7eb;
+        }
+
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+            transform: translateY(-2px);
+        }
+
+        .stats-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #f3f4f6;
+        }
+
+        .stats-header h3 {
+            color: #374151;
+            font-size: 1.3rem;
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ef4444;
+            animation: pulse 2s infinite;
+        }
+
+        .status-indicator.active {
+            background: #10b981;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #f3f4f6;
+        }
+
+        .stat-item:last-child {
+            border-bottom: none;
+        }
+
+        .stat-label {
+            color: #6b7280;
+            font-weight: 500;
+        }
+
+        .stat-value {
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: #374151;
+        }
+
+        .participants-section {
+            margin-top: 25px;
+            padding-top: 20px;
+            border-top: 2px solid #f3f4f6;
+        }
+
+        .participants-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .participants-header h4 {
+            color: #374151;
+            font-size: 1.1rem;
+        }
+
+        .participants-count {
+            background: #667eea;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .participants-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            background: #f9fafb;
+        }
+
+        .participant-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 15px;
+            border-bottom: 1px solid #e5e7eb;
+            transition: background-color 0.2s ease;
+        }
+
+        .participant-item:last-child {
+            border-bottom: none;
+        }
+
+        .participant-item:hover {
+            background: #f3f4f6;
+        }
+
+        .participant-name {
+            font-weight: 500;
+            color: #374151;
+        }
+
+        .participant-status {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .status-online {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .status-grading {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .status-offline {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .progress-section {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            margin-top: 20px;
+        }
+
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 12px;
+            background: #f3f4f6;
+            border-radius: 6px;
+            overflow: hidden;
+            margin-bottom: 15px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+            border-radius: 6px;
+            transition: width 0.5s ease;
+        }
+
+        .progress-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 20px;
+        }
+
+        .progress-stat {
+            text-align: center;
+            padding: 15px;
+            background: #f9fafb;
+            border-radius: 8px;
+        }
+
+        .progress-stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #374151;
+            margin-bottom: 5px;
+        }
+
+        .progress-stat-label {
+            color: #6b7280;
+            font-size: 0.9rem;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #6b7280;
+        }
+
+        .empty-state i {
+            font-size: 3rem;
+            margin-bottom: 15px;
+            opacity: 0.5;
+        }
+
+        @media (max-width: 1024px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            
+            .stats-panel {
+                order: -1;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 15px;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .exam-setup, .stats-panel, .progress-section {
+                padding: 20px;
+            }
+        }
+
+        /* 滚动条样式 */
+        .participants-list::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .participants-list::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 3px;
+        }
+
+        .participants-list::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 3px;
+        }
+
+        .participants-list::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><i class="fas fa-brain"></i> 智阅AI</h1>
+            <p>智能历史阅卷助手 - 让阅卷更高效，让教学更精准</p>
+        </div>
+
+        <div class="main-content">
+            <div class="exam-setup">
+                <h2 style="margin-bottom: 25px; color: #374151;">
+                    <i class="fas fa-cog"></i> 考试设置
+                </h2>
+                
+                <div class="form-group">
+                    <label for="examName">考试名称</label>
+                    <input type="text" id="examName" class="form-control" placeholder="请输入考试名称，如：七年级历史期中考试">
+                </div>
+
+                <div class="form-group">
+                    <label for="examDate">考试日期</label>
+                    <input type="date" id="examDate" class="form-control">
+                </div>
+
+                <div class="form-group">
+                    <label for="gradeLevel">年级</label>
+                    <select id="gradeLevel" class="form-control">
+                        <option value="">请选择年级</option>
+                        <option value="grade7">七年级</option>
+                        <option value="grade8">八年级</option>
+                        <option value="grade9">九年级</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="totalQuestions">题目总数</label>
+                    <input type="number" id="totalQuestions" class="form-control" placeholder="请输入题目总数" min="1" max="50">
+                </div>
+
+                <div class="form-group">
+                    <label for="totalStudents">参考学生数</label>
+                    <input type="number" id="totalStudents" class="form-control" placeholder="请输入参考学生总数" min="1">
+                </div>
+
+                <div style="display: flex; gap: 15px; margin-top: 30px;">
+                    <button id="startExam" class="btn btn-primary" style="flex: 1;">
+                        <i class="fas fa-play"></i> 开始阅卷
+                    </button>
+                    <button id="resetExam" class="btn btn-secondary">
+                        <i class="fas fa-redo"></i> 重置
+                    </button>
+                </div>
+            </div>
+
+            <div class="stats-panel">
+                <div class="stats-header">
+                    <h3>实时统计</h3>
+                    <div class="status-indicator" id="statusIndicator"></div>
+                </div>
+
+                <div id="statsContent">
+                    <div class="empty-state">
+                        <i class="fas fa-chart-line"></i>
+                        <p>请先开始阅卷以查看实时统计</p>
+                    </div>
+                </div>
+
+                <div class="participants-section" id="participantsSection" style="display: none;">
+                    <div class="participants-header">
+                        <h4>参考人员</h4>
+                        <span class="participants-count" id="participantsCount">0</span>
+                    </div>
+                    <div class="participants-list" id="participantsList">
+                        <!-- 参考人员列表将在这里动态生成 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="progress-section" id="progressSection" style="display: none;">
+            <div class="progress-header">
+                <h3><i class="fas fa-tasks"></i> 阅卷进度</h3>
+                <span id="progressPercentage">0%</span>
+            </div>
+            
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+            </div>
+
+            <div class="progress-stats" id="progressStats">
+                <!-- 进度统计将在这里动态生成 -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class ExamGradingSystem {
+            constructor() {
+                this.isExamActive = false;
+                this.examData = {
+                    name: '',
+                    date: '',
+                    grade: '',
+                    totalQuestions: 0,
+                    totalStudents: 0,
+                    gradedPapers: 0,
+                    currentQuestion: 1,
+                    startTime: null
+                };
+                this.participants = [];
+                this.updateInterval = null;
+                this.init();
+            }
+
+            init() {
+                this.bindEvents();
+                this.setDefaultDate();
+                this.generateMockParticipants();
+            }
+
+            bindEvents() {
+                document.getElementById('startExam').addEventListener('click', () => this.startExam());
+                document.getElementById('resetExam').addEventListener('click', () => this.resetExam());
+            }
+
+            setDefaultDate() {
+                const today = new Date().toISOString().split('T')[0];
+                document.getElementById('examDate').value = today;
+            }
+
+            generateMockParticipants() {
+                // 生成模拟的参考人员数据
+                const teacherNames = [
+                    '李老师', '王老师', '张老师', '刘老师', '陈老师', 
+                    '杨老师', '赵老师', '黄老师', '周老师', '吴老师',
+                    '徐老师', '孙老师', '马老师', '朱老师', '胡老师',
+                    '郭老师', '林老师', '何老师', '高老师', '梁老师'
+                ];
+                
+                const statuses = ['online', 'grading', 'offline'];
+                const statusLabels = {
+                    'online': '在线',
+                    'grading': '阅卷中',
+                    'offline': '离线'
+                };
+
+                this.participants = teacherNames.map((name, index) => ({
+                    id: index + 1,
+                    name: name,
+                    status: statuses[Math.floor(Math.random() * statuses.length)],
+                    statusLabel: statusLabels[statuses[Math.floor(Math.random() * statuses.length)]],
+                    gradedCount: Math.floor(Math.random() * 50),
+                    joinTime: new Date(Date.now() - Math.random() * 3600000).toLocaleTimeString()
+                }));
+            }
+
+            validateForm() {
+                const examName = document.getElementById('examName').value.trim();
+                const examDate = document.getElementById('examDate').value;
+                const gradeLevel = document.getElementById('gradeLevel').value;
+                const totalQuestions = parseInt(document.getElementById('totalQuestions').value);
+                const totalStudents = parseInt(document.getElementById('totalStudents').value);
+
+                if (!examName) {
+                    alert('请输入考试名称');
+                    return false;
+                }
+
+                if (!examDate) {
+                    alert('请选择考试日期');
+                    return false;
+                }
+
+                if (!gradeLevel) {
+                    alert('请选择年级');
+                    return false;
+                }
+
+                if (!totalQuestions || totalQuestions < 1) {
+                    alert('请输入有效的题目总数');
+                    return false;
+                }
+
+                if (!totalStudents || totalStudents < 1) {
+                    alert('请输入有效的参考学生数');
+                    return false;
+                }
+
+                return true;
+            }
+
+            startExam() {
+                if (!this.validateForm()) {
+                    return;
+                }
+
+                if (this.isExamActive) {
+                    alert('考试已在进行中');
+                    return;
+                }
+
+                // 收集表单数据
+                this.examData = {
+                    name: document.getElementById('examName').value.trim(),
+                    date: document.getElementById('examDate').value,
+                    grade: document.getElementById('gradeLevel').value,
+                    totalQuestions: parseInt(document.getElementById('totalQuestions').value),
+                    totalStudents: parseInt(document.getElementById('totalStudents').value),
+                    gradedPapers: 0,
+                    currentQuestion: 1,
+                    startTime: new Date()
+                };
+
+                this.isExamActive = true;
+                this.updateUI();
+                this.startRealTimeUpdates();
+
+                // 禁用表单
+                this.toggleFormInputs(false);
+                
+                // 更新按钮状态
+                const startBtn = document.getElementById('startExam');
+                startBtn.innerHTML = '<i class="fas fa-stop"></i> 停止阅卷';
+                startBtn.className = 'btn btn-success';
+                startBtn.onclick = () => this.stopExam();
+            }
+
+            stopExam() {
+                this.isExamActive = false;
+                this.stopRealTimeUpdates();
+                
+                // 启用表单
+                this.toggleFormInputs(true);
+                
+                // 更新按钮状态
+                const startBtn = document.getElementById('startExam');
+                startBtn.innerHTML = '<i class="fas fa-play"></i> 开始阅卷';
+                startBtn.className = 'btn btn-primary';
+                startBtn.onclick = () => this.startExam();
+
+                // 更新状态指示器
+                document.getElementById('statusIndicator').classList.remove('active');
+            }
+
+            resetExam() {
+                if (this.isExamActive) {
+                    if (!confirm('确定要重置当前考试吗？这将清除所有数据。')) {
+                        return;
+                    }
+                    this.stopExam();
+                }
+
+                // 重置表单
+                document.getElementById('examName').value = '';
+                document.getElementById('gradeLevel').value = '';
+                document.getElementById('totalQuestions').value = '';
+                document.getElementById('totalStudents').value = '';
+                this.setDefaultDate();
+
+                // 重置数据
+                this.examData = {
+                    name: '',
+                    date: '',
+                    grade: '',
+                    totalQuestions: 0,
+                    totalStudents: 0,
+                    gradedPapers: 0,
+                    currentQuestion: 1,
+                    startTime: null
+                };
+
+                // 重置UI
+                this.updateUI();
+                this.generateMockParticipants();
+            }
+
+            toggleFormInputs(enabled) {
+                const inputs = ['examName', 'examDate', 'gradeLevel', 'totalQuestions', 'totalStudents'];
+                inputs.forEach(id => {
+                    document.getElementById(id).disabled = !enabled;
+                });
+            }
+
+            startRealTimeUpdates() {
+                this.updateInterval = setInterval(() => {
+                    this.simulateProgress();
+                    this.updateParticipantsStatus();
+                    this.updateUI();
+                }, 2000);
+            }
+
+            stopRealTimeUpdates() {
+                if (this.updateInterval) {
+                    clearInterval(this.updateInterval);
+                    this.updateInterval = null;
+                }
+            }
+
+            simulateProgress() {
+                if (!this.isExamActive) return;
+
+                // 模拟阅卷进度
+                if (this.examData.gradedPapers < this.examData.totalStudents) {
+                    const increment = Math.floor(Math.random() * 3) + 1;
+                    this.examData.gradedPapers = Math.min(
+                        this.examData.gradedPapers + increment,
+                        this.examData.totalStudents
+                    );
+                }
+
+                // 模拟当前题目进度
+                if (Math.random() > 0.7) {
+                    this.examData.currentQuestion = Math.min(
+                        this.examData.currentQuestion + 1,
+                        this.examData.totalQuestions
+                    );
+                }
+            }
+
+            updateParticipantsStatus() {
+                // 随机更新参考人员状态
+                this.participants.forEach(participant => {
+                    if (Math.random() > 0.8) {
+                        const statuses = ['online', 'grading', 'offline'];
+                        const statusLabels = {
+                            'online': '在线',
+                            'grading': '阅卷中',
+                            'offline': '离线'
+                        };
+                        const newStatus = statuses[Math.floor(Math.random() * statuses.length)];
+                        participant.status = newStatus;
+                        participant.statusLabel = statusLabels[newStatus];
+                        
+                        if (newStatus === 'grading') {
+                            participant.gradedCount += Math.floor(Math.random() * 3);
+                        }
+                    }
+                });
+            }
+
+            updateUI() {
+                this.updateStatsPanel();
+                this.updateProgressSection();
+                this.updateParticipantsSection();
+            }
+
+            updateStatsPanel() {
+                const statsContent = document.getElementById('statsContent');
+                const statusIndicator = document.getElementById('statusIndicator');
+
+                if (this.isExamActive) {
+                    statusIndicator.classList.add('active');
+                    
+                    const elapsedTime = this.getElapsedTime();
+                    const completionRate = ((this.examData.gradedPapers / this.examData.totalStudents) * 100).toFixed(1);
+                    const avgTimePerPaper = this.examData.gradedPapers > 0 ? 
+                        (elapsedTime / this.examData.gradedPapers).toFixed(1) : '0';
+
+                    statsContent.innerHTML = `
+                        <div class="stat-item">
+                            <span class="stat-label">考试名称</span>
+                            <span class="stat-value">${this.examData.name}</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">已阅卷数</span>
+                            <span class="stat-value">${this.examData.gradedPapers}/${this.examData.totalStudents}</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">完成率</span>
+                            <span class="stat-value">${completionRate}%</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">当前题目</span>
+                            <span class="stat-value">${this.examData.currentQuestion}/${this.examData.totalQuestions}</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">用时</span>
+                            <span class="stat-value">${this.formatTime(elapsedTime)}</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">平均用时/份</span>
+                            <span class="stat-value">${avgTimePerPaper}分钟</span>
+                        </div>
+                    `;
+                } else {
+                    statusIndicator.classList.remove('active');
+                    statsContent.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-chart-line"></i>
+                            <p>请先开始阅卷以查看实时统计</p>
+                        </div>
+                    `;
+                }
+            }
+
+            updateProgressSection() {
+                const progressSection = document.getElementById('progressSection');
+                
+                if (this.isExamActive) {
+                    progressSection.style.display = 'block';
+                    
+                    const progressPercentage = ((this.examData.gradedPapers / this.examData.totalStudents) * 100).toFixed(1);
+                    const remainingPapers = this.examData.totalStudents - this.examData.gradedPapers;
+                    const elapsedTime = this.getElapsedTime();
+                    const estimatedTimeRemaining = remainingPapers > 0 && this.examData.gradedPapers > 0 ? 
+                        ((elapsedTime / this.examData.gradedPapers) * remainingPapers).toFixed(0) : 0;
+
+                    document.getElementById('progressPercentage').textContent = `${progressPercentage}%`;
+                    document.getElementById('progressFill').style.width = `${progressPercentage}%`;
+
+                    document.getElementById('progressStats').innerHTML = `
+                        <div class="progress-stat">
+                            <div class="progress-stat-value">${this.examData.gradedPapers}</div>
+                            <div class="progress-stat-label">已完成</div>
+                        </div>
+                        <div class="progress-stat">
+                            <div class="progress-stat-value">${remainingPapers}</div>
+                            <div class="progress-stat-label">待完成</div>
+                        </div>
+                        <div class="progress-stat">
+                            <div class="progress-stat-value">${this.formatTime(elapsedTime)}</div>
+                            <div class="progress-stat-label">已用时间</div>
+                        </div>
+                        <div class="progress-stat">
+                            <div class="progress-stat-value">${estimatedTimeRemaining}分钟</div>
+                            <div class="progress-stat-label">预计剩余</div>
+                        </div>
+                    `;
+                } else {
+                    progressSection.style.display = 'none';
+                }
+            }
+
+            updateParticipantsSection() {
+                const participantsSection = document.getElementById('participantsSection');
+                const participantsList = document.getElementById('participantsList');
+                const participantsCount = document.getElementById('participantsCount');
+
+                if (this.isExamActive && this.participants.length > 0) {
+                    participantsSection.style.display = 'block';
+                    
+                    // 更新参考人员计数
+                    const onlineCount = this.participants.filter(p => p.status !== 'offline').length;
+                    participantsCount.textContent = `${onlineCount}/${this.participants.length}`;
+
+                    // 按状态排序：阅卷中 > 在线 > 离线
+                    const sortedParticipants = [...this.participants].sort((a, b) => {
+                        const statusOrder = { 'grading': 0, 'online': 1, 'offline': 2 };
+                        return statusOrder[a.status] - statusOrder[b.status];
+                    });
+
+                    // 生成参考人员列表HTML
+                    participantsList.innerHTML = sortedParticipants.map(participant => `
+                        <div class="participant-item">
+                            <div class="participant-info">
+                                <div class="participant-name">${participant.name}</div>
+                                <div style="font-size: 0.8rem; color: #6b7280; margin-top: 2px;">
+                                    已阅: ${participant.gradedCount}份 | 加入: ${participant.joinTime}
+                                </div>
+                            </div>
+                            <span class="participant-status status-${participant.status}">
+                                ${participant.statusLabel}
+                            </span>
+                        </div>
+                    `).join('');
+                } else {
+                    participantsSection.style.display = 'none';
+                }
+            }
+
+            getElapsedTime() {
+                if (!this.examData.startTime) return 0;
+                return Math.floor((new Date() - this.examData.startTime) / 1000 / 60); // 返回分钟数
+            }
+
+            formatTime(minutes) {
+                if (minutes < 60) {
+                    return `${minutes}分钟`;
+                }
+                const hours = Math.floor(minutes / 60);
+                const remainingMinutes = minutes % 60;
+                return `${hours}小时${remainingMinutes}分钟`;
+            }
+        }
+
+        // 初始化系统
+        document.addEventListener('DOMContentLoaded', () => {
+            new ExamGradingSystem();
+        });
+    </script>
+</body>
+</html>
